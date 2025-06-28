@@ -7,20 +7,28 @@ import {
   Container,
   TextField,
   Button,
-  Grid,
   Divider,
   IconButton,
-  Chip
+  Chip,
+  Alert,
+  CircularProgress
 } from '@mui/material';
+import Grid from '@mui/material/Grid';
 import {
   SwapHoriz,
   ArrowDownward,
   ArrowUpward,
-  MonetizationOn
+  MonetizationOn,
+  Star,
+  StarBorder
 } from '@mui/icons-material';
 import Navigation from "@/components/Navigation";
 import { useWishlist } from "@/contexts/WishlistContext";
+import { useExchangeRate, useCurrencyConversion, useAddToCurrencyWishlist, useRemoveFromCurrencyWishlist } from '@/hooks/useApi';
+import { useAuth } from '@/contexts/AuthContext';
+import { useCustomer } from '@/contexts/CustomerContext';
 
+// Common currency pairs
 const currencyPairs = [
   { pair: 'EUR/USD', base: 'EUR', quote: 'USD' },
   { pair: 'USD/JPY', base: 'USD', quote: 'JPY' },
@@ -30,59 +38,65 @@ const currencyPairs = [
   { pair: 'EUR/GBP', base: 'EUR', quote: 'GBP' },
 ];
 
-const currencyData = [
-  { code: "USD", name: "US Dollar", rate: 1.0000, change: 0.0000, changePercent: 0.00, symbol: "$" },
-  { code: "EUR", name: "Euro", rate: 0.9234, change: +0.0023, changePercent: +0.25, symbol: "€" },
-  { code: "GBP", name: "British Pound", rate: 0.7891, change: -0.0012, changePercent: -0.15, symbol: "£" },
-  { code: "JPY", name: "Japanese Yen", rate: 148.25, change: +0.45, changePercent: +0.30, symbol: "¥" },
-  { code: "CHF", name: "Swiss Franc", rate: 0.8567, change: -0.0012, changePercent: -0.14, symbol: "CHF" },
-  { code: "AUD", name: "Australian Dollar", rate: 1.5234, change: +0.0078, changePercent: +0.51, symbol: "A$" },
-];
-
-const getPairRate = (base, quote) => {
-  const baseObj = currencyData.find(c => c.code === base);
-  const quoteObj = currencyData.find(c => c.code === quote);
-  if (!baseObj || !quoteObj) return null;
-  // All rates are relative to USD
-  // base/quote = (base/USD) / (quote/USD)
-  return (baseObj.rate / quoteObj.rate);
-};
-
-const getPairChange = (base, quote) => {
-  // Approximate: use base's change percent minus quote's change percent
-  const baseObj = currencyData.find(c => c.code === base);
-  const quoteObj = currencyData.find(c => c.code === quote);
-  if (!baseObj || !quoteObj) return 0;
-  return baseObj.changePercent - quoteObj.changePercent;
-};
-
 const Currency = () => {
   const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist();
+  const { user } = useAuth();
+  const { customerType } = useCustomer();
 
   // Converter state
   const [fromAmount, setFromAmount] = useState(1000);
   const [fromCurrency, setFromCurrency] = useState('USD');
   const [toCurrency, setToCurrency] = useState('EUR');
-  const [lastUpdated] = useState('2 minutes ago');
 
-  // Calculate conversion
-  const fromObj = currencyData.find(c => c.code === fromCurrency);
-  const toObj = currencyData.find(c => c.code === toCurrency);
-  let toAmount = '';
-  let rate = 1;
-  if (fromObj && toObj) {
-    // All rates are relative to USD
-    // from/to = (from/USD) / (to/USD)
-    rate = fromObj.rate / toObj.rate;
-    toAmount = (fromAmount * rate).toFixed(4);
-  }
+  // API calls
+  const { data: exchangeRate, isLoading: rateLoading, error: rateError } = useExchangeRate(fromCurrency, toCurrency, customerType);
+  const { data: convertedAmount, isLoading: convertLoading } = useCurrencyConversion(fromCurrency, toCurrency, fromAmount, customerType);
+
+  // Wishlist mutations
+  const addToCurrencyWishlist = useAddToCurrencyWishlist();
+  const removeFromCurrencyWishlist = useRemoveFromCurrencyWishlist();
 
   // Swap currencies
   const handleSwap = () => {
     setFromCurrency(toCurrency);
     setToCurrency(fromCurrency);
-    setFromAmount(Number(toAmount));
+    setFromAmount(Number(convertedAmount || 0));
   };
+
+  const handleAddToWishlist = async (currencyCode: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!user?.username) return;
+
+    try {
+      await addToCurrencyWishlist.mutateAsync({ currencyCode });
+    } catch (error) {
+      console.error('Failed to add to wishlist:', error);
+    }
+  };
+
+  const handleRemoveFromWishlist = async (currencyCode: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!user?.username) return;
+
+    try {
+      await removeFromCurrencyWishlist.mutateAsync({ currencyCode });
+    } catch (error) {
+      console.error('Failed to remove from wishlist:', error);
+    }
+  };
+
+  if (rateError) {
+    return (
+      <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
+        <Navigation />
+        <Container maxWidth="md" sx={{ py: 4 }}>
+          <Alert severity="error" sx={{ mb: 2 }}>
+            Failed to load currency data. Please try again later.
+          </Alert>
+        </Container>
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
@@ -146,7 +160,7 @@ const Currency = () => {
                 <TextField
                   label="To"
                   type="number"
-                  value={toAmount}
+                  value={convertedAmount?.toFixed(4) || ''}
                   fullWidth
                   InputProps={{
                     endAdornment: <span style={{ fontWeight: 700, fontSize: 18 }}>{toCurrency}</span>,
@@ -168,8 +182,8 @@ const Currency = () => {
                   SelectProps={{ native: true }}
                   sx={{ mt: 2, borderRadius: 2, bgcolor: 'background.default' }}
                 >
-                  {currencyData.map(c => (
-                    <option key={c.code} value={c.code}>{c.code} - {c.name}</option>
+                  {currencyPairs.map(c => (
+                    <option key={c.base} value={c.base}>{c.base}</option>
                   ))}
                 </TextField>
               </Grid>
@@ -186,70 +200,80 @@ const Currency = () => {
                   SelectProps={{ native: true }}
                   sx={{ mt: 2, borderRadius: 2, bgcolor: 'background.default' }}
                 >
-                  {currencyData.map(c => (
-                    <option key={c.code} value={c.code}>{c.code} - {c.name}</option>
+                  {currencyPairs.map(c => (
+                    <option key={c.quote} value={c.quote}>{c.quote}</option>
                   ))}
                 </TextField>
               </Grid>
             </Grid>
+            {rateLoading ? (
+              <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center' }}>
+                <CircularProgress size={20} />
+              </Box>
+            ) : exchangeRate ? (
             <Box sx={{ mt: 3, color: 'primary.main', fontWeight: 'bold', fontSize: 16, textAlign: 'center', letterSpacing: 1 }}>
-              1 {fromCurrency} = {rate.toFixed(4)} {toCurrency}
+                1 {fromCurrency} = {exchangeRate.finalRate?.toFixed(4)} {toCurrency}
               <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-                • Rate updated {lastUpdated}
+                  • {customerType} customer rate
               </Typography>
             </Box>
+            ) : null}
           </CardContent>
         </Card>
 
-        {/* Live Exchange Rates */}
-        <Card sx={{ bgcolor: 'background.paper', borderRadius: 2, boxShadow: 3 }}>
-          <CardContent>
-            <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
-              Live Exchange Rates
+        {/* Popular Currency Pairs */}
+        <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 3 }}>
+          Popular Currency Pairs
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Real-time currency pair rates
-            </Typography>
-            <Grid container spacing={2}>
-              {currencyPairs.map(({ pair, base, quote }) => {
-                const rate = getPairRate(base, quote);
-                const change = getPairChange(base, quote);
-                const isUp = change >= 0;
-                return (
-                  <Grid item xs={12} sm={6} md={4} key={pair}>
-                    <Box sx={{
-                      bgcolor: 'background.default',
-                      borderRadius: 2,
-                      p: 2,
-                      boxShadow: 1,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 1,
-                      minHeight: 100
+        <Grid container spacing={3}>
+          {currencyPairs.map((pair) => (
+            <Grid item xs={12} sm={6} md={4} key={pair.pair}>
+              <Card sx={{ 
+                bgcolor: 'background.paper', 
+                borderRadius: 3, 
+                boxShadow: 4, 
+                cursor: 'pointer', 
+                transition: '0.2s', 
+                '&:hover': { boxShadow: 8 } 
                     }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>{pair}</Typography>
-                        <Chip
-                          label={isUp ? `+${change.toFixed(4)}` : change.toFixed(4)}
-                          color={isUp ? 'success' : 'error'}
-                          size="small"
-                          icon={isUp ? <ArrowUpward fontSize="small" /> : <ArrowDownward fontSize="small" />}
-                          sx={{ ml: 1 }}
-                        />
-                      </Box>
-                      <Typography variant="h5" sx={{ fontWeight: 'bold', color: isUp ? 'success.main' : 'error.main' }}>
-                        {rate ? rate.toFixed(4) : '--'}
+                <CardContent>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                    <Box>
+                      <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                        {pair.pair}
                       </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {base} to {quote}
+                      <Typography variant="body2" color="text.secondary">
+                        {pair.base} to {pair.quote}
                       </Typography>
                     </Box>
-                  </Grid>
-                );
-              })}
+                    <IconButton 
+                      size="small"
+                      onClick={(e) => handleAddToWishlist(pair.pair, e)}
+                      disabled={addToCurrencyWishlist.isPending || removeFromCurrencyWishlist.isPending}
+                      color={isInWishlist(pair.pair) ? "error" : "default"}
+                    >
+                      {isInWishlist(pair.pair) ? <Star /> : <StarBorder />}
+                    </IconButton>
+                  </Box>
+                  <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 1 }}>
+                    {exchangeRate?.finalRate?.toFixed(4) || 'Loading...'}
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Chip
+                      icon={<ArrowUpward />}
+                      label="+0.25%"
+                      color="success"
+                      size="small"
+                    />
+                    <Typography variant="body2" color="text.secondary">
+                      Live rate
+                    </Typography>
+                  </Box>
+                </CardContent>
+              </Card>
             </Grid>
-          </CardContent>
-        </Card>
+          ))}
+        </Grid>
       </Container>
     </Box>
   );

@@ -4,7 +4,7 @@ import { ThemeProvider } from "@/contexts/ThemeContext";
 import { WishlistProvider } from "@/contexts/WishlistContext";
 import { AdminAuthProvider } from "@/contexts/AdminAuthContext";
 import { CustomerProvider } from "@/contexts/CustomerContext";
-import { AuthProvider } from "@/contexts/AuthContext";
+import AuthWrapper from "@/components/AuthWrapper";
 import Chatbot from "@/components/Chatbot";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import UserProtectedRoute from "@/components/UserProtectedRoute";
@@ -25,11 +25,11 @@ const queryClient = new QueryClient();
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider>
-      <AuthProvider>
+      <BrowserRouter>
+        <AuthWrapper>
         <CustomerProvider>
           <WishlistProvider>
             <AdminAuthProvider>
-              <BrowserRouter>
                 <Routes>
                   <Route path="/" element={<Index />} />
                   <Route path="/login" element={<Login />} />
@@ -52,11 +52,11 @@ const App = () => (
                   <Route path="*" element={<NotFound />} />
                 </Routes>
                 <Chatbot />
-              </BrowserRouter>
             </AdminAuthProvider>
           </WishlistProvider>
         </CustomerProvider>
-      </AuthProvider>
+        </AuthWrapper>
+      </BrowserRouter>
     </ThemeProvider>
   </QueryClientProvider>
 );

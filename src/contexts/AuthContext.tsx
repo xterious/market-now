@@ -1,23 +1,17 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-
-interface User {
-  id: string;
-  email: string;
-  name: string;
-  avatar?: string;
-  customerType: 'Special' | 'Normal';
-  createdAt: string;
-}
+import { authAPI, userAPI } from '@/config/apiService';
+import { User, LoginRequest, RegisterRequest, AuthResponse } from '@/config/types';
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
-  signup: (email: string, password: string, name: string) => Promise<boolean>;
+  login: (username: string, password: string) => Promise<boolean>;
+  signup: (userData: RegisterRequest) => Promise<boolean>;
   loginWithGoogle: () => Promise<boolean>;
   logout: () => void;
   updateUser: (userData: Partial<User>) => void;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -34,64 +28,112 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Check for existing token and user data on mount
   useEffect(() => {
-    // Check if user is already authenticated
-    const savedUser = localStorage.getItem('user');
-    if (savedUser) {
-      try {
-        setUser(JSON.parse(savedUser));
-      } catch (error) {
-        console.error('Error parsing saved user:', error);
-        localStorage.removeItem('user');
+    const initializeAuth = async () => {
+      const token = localStorage.getItem('accessToken');
+      const savedUser = localStorage.getItem('user');
+      
+      if (token && savedUser) {
+        try {
+          const userData = JSON.parse(savedUser);
+          setUser(userData);
+          
+          // Verify token is still valid by fetching current user
+          await refreshUser();
+        } catch (error) {
+          console.error('Error initializing auth:', error);
+          handleLogout();
+        }
       }
-    }
-    setIsLoading(false);
+      setIsLoading(false);
+    };
+
+    initializeAuth();
   }, []);
 
-  const login = async (email: string, password: string): Promise<boolean> => {
+  // Listen for logout events from API interceptor
+  useEffect(() => {
+    const handleLogoutEvent = () => {
+      handleLogout();
+    };
+
+    window.addEventListener('auth:logout', handleLogoutEvent);
+    return () => window.removeEventListener('auth:logout', handleLogoutEvent);
+  }, []);
+
+  const handleLogout = () => {
+    setUser(null);
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('user');
+    window.location.href = '/login';
+  };
+
+  const login = async (username: string, password: string): Promise<boolean> => {
     setIsLoading(true);
+    console.log('Starting login process for username:', username);
+    
     try {
-      // Simulate API call - replace with actual authentication
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const credentials: LoginRequest = { username, password };
+      console.log('Sending login request to backend...');
+      const authResponse: AuthResponse = await authAPI.login(credentials);
+      console.log('Login successful, received auth response:', authResponse);
       
-      // Mock user data - replace with actual API response
-      const mockUser: User = {
-        id: '1',
-        email,
-        name: email.split('@')[0],
-        customerType: 'Normal',
-        createdAt: new Date().toISOString(),
+      // Store token
+      localStorage.setItem('accessToken', authResponse.accessToken);
+      console.log('Token stored in localStorage');
+      
+      // Fetch user details
+      console.log('Fetching user details...');
+      const userData = await userAPI.getCurrentUser();
+      console.log('User details received:', userData);
+      
+      const fullUser: User = {
+        id: userData.username, // Using username as ID for now
+        username: userData.username,
+        email: userData.email,
+        firstName: userData.firstName || '', // Handle null values
+        lastName: userData.lastName || '', // Handle null values
+        roles: authResponse.roles.map(role => ({
+          id: role.authority,
+          name: role.authority,
+          description: role.authority
+        }))
       };
       
-      setUser(mockUser);
-      localStorage.setItem('user', JSON.stringify(mockUser));
+      setUser(fullUser);
+      localStorage.setItem('user', JSON.stringify(fullUser));
+      console.log('User state updated and stored:', fullUser);
+      
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Login error:', error);
+      
+      // Provide more specific error messages
+      if (error.response?.status === 401) {
+        console.error('Invalid credentials');
+      } else if (error.response?.status === 400) {
+        console.error('Bad request:', error.response.data);
+      } else if (error.response?.status >= 500) {
+        console.error('Server error:', error.response.status);
+      } else if (error.code === 'NETWORK_ERROR') {
+        console.error('Network error - check if backend is running');
+      }
+      
       return false;
     } finally {
       setIsLoading(false);
+      console.log('Login process completed');
     }
   };
 
-  const signup = async (email: string, password: string, name: string): Promise<boolean> => {
+  const signup = async (userData: RegisterRequest): Promise<boolean> => {
     setIsLoading(true);
     try {
-      // Simulate API call - replace with actual registration
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const newUser = await authAPI.register(userData);
       
-      // Mock user data - replace with actual API response
-      const mockUser: User = {
-        id: Date.now().toString(),
-        email,
-        name,
-        customerType: 'Normal',
-        createdAt: new Date().toISOString(),
-      };
-      
-      setUser(mockUser);
-      localStorage.setItem('user', JSON.stringify(mockUser));
-      return true;
+      // After successful registration, log the user in
+      return await login(userData.username, userData.password);
     } catch (error) {
       console.error('Signup error:', error);
       return false;
@@ -103,22 +145,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loginWithGoogle = async (): Promise<boolean> => {
     setIsLoading(true);
     try {
-      // Simulate Google OAuth - replace with actual Google OAuth implementation
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Mock Google user data
-      const mockUser: User = {
-        id: 'google_' + Date.now(),
-        email: 'user@gmail.com',
-        name: 'Google User',
-        avatar: 'https://via.placeholder.com/150',
-        customerType: 'Normal',
-        createdAt: new Date().toISOString(),
-      };
-      
-      setUser(mockUser);
-      localStorage.setItem('user', JSON.stringify(mockUser));
-      return true;
+      // TODO: Implement Google OAuth
+      // For now, return false
+      console.log('Google OAuth not implemented yet');
+      return false;
     } catch (error) {
       console.error('Google login error:', error);
       return false;
@@ -128,8 +158,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
-    setUser(null);
-    localStorage.removeItem('user');
+    handleLogout();
   };
 
   const updateUser = (userData: Partial<User>) => {
@@ -137,6 +166,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const updatedUser = { ...user, ...userData };
       setUser(updatedUser);
       localStorage.setItem('user', JSON.stringify(updatedUser));
+    }
+  };
+
+  const refreshUser = async () => {
+    try {
+      const userData = await userAPI.getCurrentUser();
+      const updatedUser: User = {
+        ...user!,
+        username: userData.username,
+        email: userData.email,
+        firstName: userData.firstName || '', // Handle null values
+        lastName: userData.lastName || '', // Handle null values
+      };
+      setUser(updatedUser);
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+    } catch (error) {
+      console.error('Error refreshing user:', error);
+      handleLogout();
     }
   };
 
@@ -151,7 +198,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       signup,
       loginWithGoogle,
       logout,
-      updateUser
+      updateUser,
+      refreshUser
     }}>
       {children}
     </AuthContext.Provider>

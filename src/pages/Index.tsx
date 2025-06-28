@@ -15,7 +15,9 @@ import {
   ListItem,
   ListItemText,
   Divider,
-  Paper
+  Paper,
+  CircularProgress,
+  Alert
 } from '@mui/material';
 import { 
   TrendingUp, 
@@ -37,15 +39,21 @@ import { Link } from "react-router-dom";
 import Navigation from '../components/Navigation';
 import CustomerTypeIndicator from '@/components/CustomerTypeIndicator';
 import { useAuth } from '@/contexts/AuthContext';
+import { useStockSymbols, useTopHeadlines } from '@/hooks/useApi';
+import LoginTest from '@/components/LoginTest';
 
 const Index = () => {
-  // Mock data for demonstration
-  const marketData = [
-    { symbol: "AAPL", name: "Apple Inc.", price: 175.43, change: +2.34, changePercent: +1.35 },
-    { symbol: "GOOGL", name: "Alphabet Inc.", price: 2834.52, change: -15.23, changePercent: -0.53 },
-    { symbol: "MSFT", name: "Microsoft Corp.", price: 378.85, change: +5.67, changePercent: +1.52 },
-    { symbol: "TSLA", name: "Tesla Inc.", price: 248.50, change: +12.45, changePercent: +5.28 },
-  ];
+  const { isAuthenticated } = useAuth();
+
+  // API calls
+  const { data: stockSymbolsData, isLoading: stocksLoading, error: stocksError } = useStockSymbols('NASDAQ', 0, 4);
+  const { data: headlines, isLoading: newsLoading, error: newsError } = useTopHeadlines();
+
+  // Get top 4 stocks for market overview
+  const marketData = stockSymbolsData?.content?.slice(0, 4) || [];
+
+  // Get recent news (top 5)
+  const recentNews = headlines?.slice(0, 5) || [];
 
   const quickActions = [
     { title: "View Stocks", icon: TrendingUpIcon, path: "/stocks", color: "primary" },
@@ -54,15 +62,18 @@ const Index = () => {
     { title: "My Watchlist", icon: StarIcon, path: "/wishlist", color: "warning" },
   ];
 
-  const recentNews = [
-    { title: "Federal Reserve announces interest rate decision", source: "Reuters", time: "2 hours ago" },
-    { title: "Tech stocks rally on strong earnings reports", source: "Bloomberg", time: "4 hours ago" },
-    { title: "Global markets respond to economic data", source: "CNBC", time: "6 hours ago" },
-    { title: "Oil prices surge on supply concerns", source: "MarketWatch", time: "8 hours ago" },
-    { title: "Cryptocurrency market shows strong recovery", source: "CoinDesk", time: "10 hours ago" },
-  ];
-
-  const { isAuthenticated } = useAuth();
+  if (stocksError || newsError) {
+    return (
+      <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
+        <Navigation />
+        <Container maxWidth="lg" sx={{ py: 4 }}>
+          <Alert severity="error" sx={{ mb: 2 }}>
+            Failed to load market data. Please try again later.
+          </Alert>
+        </Container>
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
@@ -124,6 +135,11 @@ const Index = () => {
           <Typography variant="h4" component="h2" sx={{ mb: 3, fontWeight: 'bold' }}>
             Market Overview
           </Typography>
+          {stocksLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+              <CircularProgress />
+            </Box>
+          ) : (
           <Box sx={{ 
             display: 'grid', 
             gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
@@ -138,7 +154,7 @@ const Index = () => {
                         {stock.symbol}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        {stock.name}
+                          {stock.description || 'N/A'}
                       </Typography>
                     </Box>
                     <IconButton size="small" color="primary">
@@ -146,11 +162,11 @@ const Index = () => {
                     </IconButton>
                   </Box>
                   <Typography variant="h5" component="div" sx={{ fontWeight: 'bold', mb: 1 }}>
-                    ${stock.price}
+                      ${stock.currentPrice?.toFixed(2) || 'N/A'}
                   </Typography>
                   <Chip
                     icon={stock.change >= 0 ? <TrendingUp /> : <TrendingDown />}
-                    label={`${stock.changePercent > 0 ? '+' : ''}${stock.changePercent}%`}
+                      label={`${stock.percentChange > 0 ? '+' : ''}${stock.percentChange?.toFixed(2) || 0}%`}
                     color={stock.change >= 0 ? "success" : "error"}
                     size="small"
                   />
@@ -158,6 +174,7 @@ const Index = () => {
               </Card>
             ))}
           </Box>
+          )}
         </Box>
 
         {/* Quick Actions */}
@@ -198,49 +215,51 @@ const Index = () => {
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
                 <Newspaper sx={{ mr: 1, color: 'primary.main' }} />
                 <Typography variant="h5" component="h3" sx={{ fontWeight: 'bold' }}>
-                  Latest News
+                  Recent News
                 </Typography>
               </Box>
-              
-              {/* Horizontal Scrolling News */}
-              <Box sx={{ 
-                display: 'flex', 
-                gap: 2, 
-                overflowX: 'auto', 
-                pb: 2,
-                '&::-webkit-scrollbar': { height: 6 },
-                '&::-webkit-scrollbar-track': { bgcolor: 'grey.100', borderRadius: 3 },
-                '&::-webkit-scrollbar-thumb': { bgcolor: 'grey.400', borderRadius: 3 },
-                '&::-webkit-scrollbar-thumb:hover': { bgcolor: 'grey.500' }
-              }}>
+              {newsLoading ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                  <CircularProgress />
+                </Box>
+              ) : (
+                <List>
                 {recentNews.map((news, index) => (
-                  <Card key={index} sx={{ 
-                    minWidth: 280, 
-                    flexShrink: 0,
-                    '&:hover': { transform: 'translateY(-2px)', boxShadow: 3 }
-                  }}>
-                    <CardContent sx={{ p: 2 }}>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                        {news.source} • {news.time}
+                    <React.Fragment key={news.newsId}>
+                      <ListItem sx={{ px: 0 }}>
+                        <ListItemText
+                          primary={
+                            <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+                              {news.headline}
+                            </Typography>
+                          }
+                          secondary={
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Typography variant="caption" color="text.secondary">
+                                {news.source}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                •
                       </Typography>
-                      <Typography variant="body1" sx={{ fontWeight: 'medium', mb: 2 }}>
-                        {news.title}
+                              <Typography variant="caption" color="text.secondary">
+                                {new Date(news.datetime * 1000).toLocaleDateString()}
                       </Typography>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Button size="small" variant="outlined">
-                          Read More
-                        </Button>
-                        <IconButton size="small" color="primary">
-                          <Star />
-                        </IconButton>
                       </Box>
-                    </CardContent>
-                  </Card>
+                          }
+                        />
+                      </ListItem>
+                      {index < recentNews.length - 1 && <Divider />}
+                    </React.Fragment>
                 ))}
-              </Box>
-              
-              <Box sx={{ mt: 2, textAlign: 'center' }}>
-                <Button variant="outlined" component={Link} to="/news">
+                </List>
+              )}
+              <Box sx={{ mt: 2 }}>
+                <Button 
+                  variant="outlined" 
+                  component={Link} 
+                  to="/news"
+                  startIcon={<Visibility />}
+                >
                   View All News
                 </Button>
               </Box>
@@ -250,32 +269,45 @@ const Index = () => {
           <Card className="card-elevated">
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-                <BarChart sx={{ mr: 1, color: 'success.main' }} />
+                <BarChart sx={{ mr: 1, color: 'primary.main' }} />
                 <Typography variant="h5" component="h3" sx={{ fontWeight: 'bold' }}>
                   Market Stats
                 </Typography>
               </Box>
-              <Box sx={{ space: 2 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                  <Typography variant="body1">S&P 500</Typography>
-                  <Chip label="+1.2%" color="success" size="small" />
-                </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                  <Typography variant="body1">NASDAQ</Typography>
-                  <Chip label="+0.8%" color="success" size="small" />
-                </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                  <Typography variant="body1">DOW</Typography>
-                  <Chip label="-0.3%" color="error" size="small" />
-                </Box>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Typography variant="body1">VIX</Typography>
-                  <Chip label="15.2" color="default" size="small" />
+                  <Typography variant="body2" color="text.secondary">
+                    Active Stocks
+                  </Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                    {stockSymbolsData?.totalElements || 0}
+                  </Typography>
+                </Box>
+                <Divider />
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography variant="body2" color="text.secondary">
+                    News Articles
+                  </Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                    {headlines?.length || 0}
+                  </Typography>
+                </Box>
+                <Divider />
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography variant="body2" color="text.secondary">
+                    Market Status
+                  </Typography>
+                  <Chip label="Open" color="success" size="small" />
                 </Box>
               </Box>
             </CardContent>
           </Card>
         </Box>
+
+        {/* Login Test Component - For debugging */}
+        {!isAuthenticated && (
+          <LoginTest />
+        )}
       </Container>
     </Box>
   );

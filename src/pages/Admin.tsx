@@ -30,7 +30,8 @@ import {
   Alert,
   Snackbar,
   Switch,
-  FormControlLabel
+  FormControlLabel,
+  CircularProgress
 } from '@mui/material';
 import { 
   People, 
@@ -56,15 +57,24 @@ import Navigation from "@/components/Navigation";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useCustomer } from "@/contexts/CustomerContext";
 import CustomerTypeIndicator from "@/components/CustomerTypeIndicator";
+import { 
+  useAllUsers, 
+  useCreateUser, 
+  useUpdateUser, 
+  useDeleteUser,
+  useLiborSpreadNormal,
+  useLiborSpreadSpecial,
+  useSetLiborSpreadNormal,
+  useSetLiborSpreadSpecial
+} from '@/hooks/useApi';
 
 interface User {
-  id: number;
-  name: string;
+  id: string;
+  username: string;
   email: string;
-  status: 'Active' | 'Inactive' | 'Suspended';
-  joinDate: string;
-  customerType: 'Special' | 'Normal';
-  liborRate: number;
+  firstName: string;
+  lastName: string;
+  roles: Array<{ id: string; name: string; description: string }>;
 }
 
 interface LiborRate {
@@ -74,25 +84,14 @@ interface LiborRate {
 
 const Admin = () => {
   const [activeTab, setActiveTab] = useState(0);
-  const [users, setUsers] = useState<User[]>([
-    { id: 1, name: "John Doe", email: "john@example.com", status: "Active", joinDate: "2024-01-15", customerType: "Special", liborRate: 5.25 },
-    { id: 2, name: "Jane Smith", email: "jane@example.com", status: "Active", joinDate: "2024-01-14", customerType: "Normal", liborRate: 4.75 },
-    { id: 3, name: "Bob Johnson", email: "bob@example.com", status: "Inactive", joinDate: "2024-01-13", customerType: "Normal", liborRate: 4.75 },
-    { id: 4, name: "Alice Brown", email: "alice@example.com", status: "Active", joinDate: "2024-01-12", customerType: "Special", liborRate: 5.25 },
-  ]);
-  
-  const [liborRates, setLiborRates] = useState<LiborRate>({
-    specialCustomer: 5.25,
-    normalCustomer: 4.75
-  });
-
   const [userDialog, setUserDialog] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [userForm, setUserForm] = useState({
-    name: '',
+    username: '',
     email: '',
-    status: 'Active' as const,
-    customerType: 'Normal' as const
+    firstName: '',
+    lastName: '',
+    password: ''
   });
 
   const [snackbar, setSnackbar] = useState({
@@ -104,8 +103,35 @@ const Admin = () => {
   const { logout } = useAdminAuth();
   const { customerType, setCustomerType, isSpecialCustomer } = useCustomer();
 
+  // API calls
+  const { data: users, isLoading: usersLoading, error: usersError } = useAllUsers();
+  const { data: normalLibor, isLoading: normalLiborLoading } = useLiborSpreadNormal();
+  const { data: specialLibor, isLoading: specialLiborLoading } = useLiborSpreadSpecial();
+
+  // Mutations
+  const createUser = useCreateUser();
+  const updateUser = useUpdateUser();
+  const deleteUser = useDeleteUser();
+  const setNormalLibor = useSetLiborSpreadNormal();
+  const setSpecialLibor = useSetLiborSpreadSpecial();
+
+  const [liborRates, setLiborRates] = useState<LiborRate>({
+    specialCustomer: specialLibor || 5.25,
+    normalCustomer: normalLibor || 4.75
+  });
+
+  // Update libor rates when API data loads
+  React.useEffect(() => {
+    if (normalLibor !== undefined && specialLibor !== undefined) {
+      setLiborRates({
+        specialCustomer: specialLibor,
+        normalCustomer: normalLibor
+      });
+    }
+  }, [normalLibor, specialLibor]);
+
   const userStats = [
-    { name: "Total Users", value: users.length.toString(), change: "+12%", icon: People },
+    { name: "Total Users", value: users?.length?.toString() || "0", change: "+12%", icon: People },
     { name: "Active Sessions", value: "1,234", change: "+5%", icon: TrendingUp },
     { name: "Revenue", value: "$45,231", change: "+18%", icon: AttachMoney },
     { name: "Growth Rate", value: "23.5%", change: "+2.1%", icon: TrendingUpIcon },
@@ -122,58 +148,66 @@ const Admin = () => {
     setActiveTab(newValue);
   };
 
-  const handleLiborRateChange = (type: keyof LiborRate, value: number) => {
+  const handleLiborRateChange = async (type: keyof LiborRate, value: number) => {
     setLiborRates(prev => ({ ...prev, [type]: value }));
     
-    // Update all users with the corresponding customer type
-    setUsers(prev => prev.map(user => 
-      user.customerType.toLowerCase() === type.replace('Customer', '').toLowerCase()
-        ? { ...user, liborRate: value }
-        : user
-    ));
-  };
-
-  const handleSaveLiborRates = () => {
+    try {
+      if (type === 'specialCustomer') {
+        await setSpecialLibor.mutateAsync(value);
+      } else {
+        await setNormalLibor.mutateAsync(value);
+      }
+      
     setSnackbar({
       open: true,
       message: 'LIBOR rates updated successfully!',
       severity: 'success'
     });
+    } catch (error) {
+      setSnackbar({
+        open: true,
+        message: 'Failed to update LIBOR rates',
+        severity: 'error'
+      });
+    }
   };
 
   const openUserDialog = (user?: User) => {
     if (user) {
       setEditingUser(user);
       setUserForm({
-        name: user.name,
+        username: user.username,
         email: user.email,
-        status: user.status,
-        customerType: user.customerType
+        firstName: user.firstName,
+        lastName: user.lastName,
+        password: ''
       });
     } else {
       setEditingUser(null);
       setUserForm({
-        name: '',
+        username: '',
         email: '',
-        status: 'Active',
-        customerType: 'Normal'
+        firstName: '',
+        lastName: '',
+        password: ''
       });
     }
     setUserDialog(true);
   };
 
-  const handleSaveUser = () => {
+  const handleSaveUser = async () => {
+    try {
     if (editingUser) {
       // Update existing user
-      setUsers(prev => prev.map(user => 
-        user.id === editingUser.id 
-          ? { 
-              ...user, 
-              ...userForm, 
-              liborRate: userForm.customerType === 'Special' ? liborRates.specialCustomer : liborRates.normalCustomer
-            }
-          : user
-      ));
+        await updateUser.mutateAsync({
+          id: editingUser.id,
+          userData: {
+            username: userForm.username,
+            email: userForm.email,
+            firstName: userForm.firstName,
+            lastName: userForm.lastName
+          }
+        });
       setSnackbar({
         open: true,
         message: 'User updated successfully!',
@@ -181,13 +215,13 @@ const Admin = () => {
       });
     } else {
       // Add new user
-      const newUser: User = {
-        id: Math.max(...users.map(u => u.id)) + 1,
-        ...userForm,
-        joinDate: new Date().toISOString().split('T')[0],
-        liborRate: userForm.customerType === 'Special' ? liborRates.specialCustomer : liborRates.normalCustomer
-      };
-      setUsers(prev => [...prev, newUser]);
+        await createUser.mutateAsync({
+          username: userForm.username,
+          email: userForm.email,
+          firstName: userForm.firstName,
+          lastName: userForm.lastName,
+          password: userForm.password
+        });
       setSnackbar({
         open: true,
         message: 'User added successfully!',
@@ -195,211 +229,133 @@ const Admin = () => {
       });
     }
     setUserDialog(false);
+    } catch (error) {
+      setSnackbar({
+        open: true,
+        message: 'Failed to save user',
+        severity: 'error'
+      });
+    }
   };
 
-  const handleDeleteUser = (userId: number) => {
-    setUsers(prev => prev.filter(user => user.id !== userId));
+  const handleDeleteUser = async (userId: string) => {
+    try {
+      await deleteUser.mutateAsync(userId);
     setSnackbar({
       open: true,
       message: 'User deleted successfully!',
       severity: 'success'
     });
+    } catch (error) {
+      setSnackbar({
+        open: true,
+        message: 'Failed to delete user',
+        severity: 'error'
+      });
+    }
   };
 
-  const renderStatsCards = () => (
-    <Grid container spacing={3} sx={{ mb: 4 }}>
-      {userStats.map((stat) => {
-        const Icon = stat.icon;
+  const handleCloseSnackbar = () => {
+    setSnackbar(prev => ({ ...prev, open: false }));
+  };
+
+  if (usersError) {
+    return (
+      <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
+        <Navigation />
+        <Container maxWidth="lg" sx={{ py: 4 }}>
+          <Alert severity="error" sx={{ mb: 2 }}>
+            Failed to load admin data. Please try again later.
+          </Alert>
+        </Container>
+      </Box>
+    );
+  }
+
         return (
+    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
+      <Navigation />
+      <Container maxWidth="lg" sx={{ py: 4 }}>
+        {/* Header */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+          <Box>
+            <Typography variant="h3" component="h1" sx={{ fontWeight: 'bold', mb: 1 }}>
+              Admin Dashboard
+            </Typography>
+            <Typography variant="body1" color="text.secondary">
+              Manage users, settings, and system configuration
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <CustomerTypeIndicator />
+            <Button
+              variant="outlined"
+              startIcon={<Logout />}
+              onClick={logout}
+              color="error"
+            >
+              Logout
+            </Button>
+          </Box>
+        </Box>
+
+        {/* Stats Cards */}
+        <Box sx={{ mb: 4 }}>
+          <Grid container spacing={3}>
+            {userStats.map((stat) => (
           <Grid item xs={12} sm={6} md={3} key={stat.name}>
-            <Card>
+                <Card className="card-elevated">
               <CardContent>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <Box>
+                        <Typography variant="h4" sx={{ fontWeight: 'bold', mb: 1 }}>
+                          {stat.value}
+                        </Typography>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                       {stat.name}
                     </Typography>
-                    <Typography variant="h4" component="div" sx={{ fontWeight: 'bold', mb: 1 }}>
-                      {stat.value}
-                    </Typography>
-                    <Chip label={stat.change} color="success" size="small" />
+                        <Chip
+                          label={stat.change}
+                          color="success"
+                          size="small"
+                          icon={<TrendingUpIcon />}
+                        />
+                      </Box>
+                      <Box sx={{ 
+                        bgcolor: 'primary.main', 
+                        borderRadius: '50%', 
+                        p: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}>
+                        <stat.icon sx={{ color: 'white', fontSize: 24 }} />
                   </Box>
-                  <Icon sx={{ fontSize: 32, color: 'primary.main' }} />
                 </Box>
               </CardContent>
             </Card>
           </Grid>
-        );
-      })}
-    </Grid>
-  );
-
-  const renderLiborRateManagement = () => (
-    <Card>
-      <CardContent>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-          <AttachMoney sx={{ mr: 1 }} />
-          <Typography variant="h6" component="h2">
-            LIBOR Rate Management
-          </Typography>
+            ))}
+          </Grid>
         </Box>
-        
-        <Grid container spacing={3} sx={{ mb: 3 }}>
-          <Grid item xs={12} md={6}>
-            <TextField
-              fullWidth
-              label="Special Customer LIBOR Rate (%)"
-              type="number"
-              value={liborRates.specialCustomer}
-              onChange={(e) => handleLiborRateChange('specialCustomer', parseFloat(e.target.value) || 0)}
-              InputProps={{
-                endAdornment: <Typography variant="body2">%</Typography>
-              }}
-            />
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <TextField
-              fullWidth
-              label="Normal Customer LIBOR Rate (%)"
-              type="number"
-              value={liborRates.normalCustomer}
-              onChange={(e) => handleLiborRateChange('normalCustomer', parseFloat(e.target.value) || 0)}
-              InputProps={{
-                endAdornment: <Typography variant="body2">%</Typography>
-              }}
-            />
-          </Grid>
-        </Grid>
-        
-        <Button 
-          variant="contained" 
-          startIcon={<Save />}
-          onClick={handleSaveLiborRates}
-        >
-          Save LIBOR Rates
-        </Button>
-      </CardContent>
-    </Card>
-  );
 
-  const renderRecentActivity = () => (
-    <Card>
-      <CardContent>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-          <TrendingUp sx={{ mr: 1 }} />
-          <Typography variant="h6" component="h2">
-            Recent Activity
-          </Typography>
+        {/* Tabs */}
+        <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+          <Tabs value={activeTab} onChange={handleTabChange}>
+            <Tab label="User Management" />
+            <Tab label="LIBOR Rates" />
+            <Tab label="System Logs" />
+            <Tab label="Settings" />
+          </Tabs>
         </Box>
-        <Box sx={{ space: 2 }}>
-          {systemLogs.slice(0, 5).map((log) => (
-            <Box 
-              key={log.id} 
-              sx={{ 
-                display: 'flex', 
-                justifyContent: 'space-between', 
-                alignItems: 'center', 
-                p: 2, 
-                mb: 1,
-                borderRadius: 1,
-                '&:hover': { bgcolor: 'action.hover' }
-              }}
-            >
-              <Box>
-                <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
-                  {log.event}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {log.user}
-                </Typography>
-              </Box>
-              <Box sx={{ textAlign: 'right' }}>
-                <Chip 
-                  label={log.status} 
-                  color={log.status === 'Success' ? 'success' : 'error'}
-                  size="small"
-                />
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                  {log.timestamp}
-                </Typography>
-              </Box>
-            </Box>
-          ))}
-        </Box>
-      </CardContent>
-    </Card>
-  );
 
-  const renderQuickActions = () => (
-    <Card>
-      <CardContent>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-          <BarChart sx={{ mr: 1 }} />
-          <Typography variant="h6" component="h2">
-            Quick Actions
-          </Typography>
-        </Box>
-        <Grid container spacing={2}>
-          <Grid item xs={6}>
-            <Button 
-              variant="contained" 
-              fullWidth 
-              sx={{ height: 80, flexDirection: 'column', gap: 1 }}
-            >
-              <Storage />
-              <Typography variant="body2">Backup</Typography>
-            </Button>
-          </Grid>
-          <Grid item xs={6}>
-            <Button 
-              variant="outlined" 
-              fullWidth 
-              sx={{ height: 80, flexDirection: 'column', gap: 1 }}
-            >
-              <Notifications />
-              <Typography variant="body2">Alerts</Typography>
-            </Button>
-          </Grid>
-          <Grid item xs={6}>
-            <Button 
-              variant="outlined" 
-              fullWidth 
-              sx={{ height: 80, flexDirection: 'column', gap: 1 }}
-            >
-              <Visibility />
-              <Typography variant="body2">Monitor</Typography>
-            </Button>
-          </Grid>
-          <Grid item xs={6}>
-            <Button 
-              variant="outlined" 
-              fullWidth 
-              sx={{ height: 80, flexDirection: 'column', gap: 1 }}
-            >
-              <Settings />
-              <Typography variant="body2">Config</Typography>
-            </Button>
-          </Grid>
-        </Grid>
-      </CardContent>
-    </Card>
-  );
-
-  const renderUserManagement = () => (
-    <Card>
-      <CardContent>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        {/* Tab Content */}
+        {activeTab === 0 && (
           <Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-              <People sx={{ mr: 1 }} />
-              <Typography variant="h6" component="h2">
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+              <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
                 User Management
               </Typography>
-            </Box>
-            <Typography variant="body2" color="text.secondary">
-              Manage user accounts, customer types, and LIBOR rates
-            </Typography>
-          </Box>
           <Button 
             variant="contained" 
             startIcon={<PersonAdd />}
@@ -409,173 +365,180 @@ const Admin = () => {
           </Button>
         </Box>
         
-        <TextField 
-          placeholder="Search users..." 
-          size="small" 
-          sx={{ mb: 3, maxWidth: 300 }}
-        />
-        
+            {usersLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                <CircularProgress />
+              </Box>
+            ) : (
         <TableContainer component={Paper}>
           <Table>
             <TableHead>
               <TableRow>
+                      <TableCell>Username</TableCell>
+                      <TableCell>Email</TableCell>
                 <TableCell>Name</TableCell>
-                <TableCell>Email</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Customer Type</TableCell>
-                <TableCell>LIBOR Rate</TableCell>
-                <TableCell>Join Date</TableCell>
+                      <TableCell>Roles</TableCell>
                 <TableCell>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {users.map((user) => (
+                    {users?.map((user) => (
                 <TableRow key={user.id}>
-                  <TableCell sx={{ fontWeight: 'bold' }}>{user.name}</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold' }}>{user.username}</TableCell>
                   <TableCell>{user.email}</TableCell>
+                        <TableCell>{user.firstName} {user.lastName}</TableCell>
                   <TableCell>
-                    <Chip 
-                      label={user.status} 
-                      color={user.status === 'Active' ? 'success' : user.status === 'Suspended' ? 'error' : 'default'}
-                      size="small"
-                    />
+                          {user.roles.map(role => (
+                            <Chip key={role.id} label={role.name} size="small" sx={{ mr: 0.5 }} />
+                          ))}
                   </TableCell>
                   <TableCell>
-                    <Chip 
-                      label={user.customerType} 
-                      color={user.customerType === 'Special' ? 'primary' : 'secondary'}
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                      {user.liborRate}%
-                    </Typography>
-                  </TableCell>
-                  <TableCell>{user.joinDate}</TableCell>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', gap: 1 }}>
                       <IconButton 
                         size="small" 
+                            onClick={() => openUserDialog(user)}
                         color="primary"
-                        onClick={() => openUserDialog(user)}
                       >
                         <Edit />
                       </IconButton>
                       <IconButton 
                         size="small" 
+                            onClick={() => handleDeleteUser(user.id)}
                         color="error"
-                        onClick={() => handleDeleteUser(user.id)}
                       >
                         <Delete />
                       </IconButton>
-                    </Box>
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </TableContainer>
-      </CardContent>
-    </Card>
-  );
+            )}
+          </Box>
+        )}
 
-  return (
-    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
-      <Navigation />
-      
-      <Container maxWidth="lg" sx={{ py: 4 }}>
-        <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        {activeTab === 1 && (
           <Box>
-            <Typography variant="h3" component="h1" sx={{ fontWeight: 'bold', mb: 1 }}>
-              Admin Dashboard
+            <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 3 }}>
+              LIBOR Rate Management
             </Typography>
-            <Typography variant="body1" color="text.secondary">
-              Manage your MarketNow application
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={6}>
+                <Card>
+                  <CardContent>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                      <Diamond sx={{ mr: 1, color: 'primary.main' }} />
+                      <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                        Special Customer Rate
             </Typography>
           </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Typography variant="body2">Normal</Typography>
-              <Switch
-                checked={isSpecialCustomer}
-                onChange={(e) => setCustomerType(e.target.checked ? 'Special' : 'Normal')}
-                color="primary"
-              />
-              <Diamond />
-              <Typography variant="body2">Special</Typography>
+                    <TextField
+                      fullWidth
+                      label="LIBOR Rate (%)"
+                      type="number"
+                      value={liborRates.specialCustomer}
+                      onChange={(e) => handleLiborRateChange('specialCustomer', Number(e.target.value))}
+                      disabled={specialLiborLoading || setSpecialLibor.isPending}
+                      InputProps={{
+                        endAdornment: specialLiborLoading || setSpecialLibor.isPending ? <CircularProgress size={20} /> : null
+                      }}
+                    />
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Card>
+                  <CardContent>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                      <Person sx={{ mr: 1, color: 'primary.main' }} />
+                      <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                        Normal Customer Rate
+                      </Typography>
             </Box>
-            <CustomerTypeIndicator size="small" showLabel={false} />
-            <Button 
-              variant="outlined" 
-              color="error" 
-              startIcon={<Logout />}
-              onClick={logout}
-            >
-              Logout
-            </Button>
-          </Box>
-        </Box>
-
-        <Box sx={{ mb: 4 }}>
-          <Tabs value={activeTab} onChange={handleTabChange} sx={{ mb: 3 }}>
-            <Tab label="Overview" />
-            <Tab label="LIBOR Rates" />
-            <Tab label="Users" />
-            <Tab label="System" />
-            <Tab label="Settings" />
-          </Tabs>
-
-          {/* Overview Tab */}
-          {activeTab === 0 && (
-            <Box>
-              {renderStatsCards()}
-              <Grid container spacing={3}>
-                <Grid item xs={12} lg={6}>
-                  {renderRecentActivity()}
-                </Grid>
-                <Grid item xs={12} lg={6}>
-                  {renderQuickActions()}
+                    <TextField
+                      fullWidth
+                      label="LIBOR Rate (%)"
+                      type="number"
+                      value={liborRates.normalCustomer}
+                      onChange={(e) => handleLiborRateChange('normalCustomer', Number(e.target.value))}
+                      disabled={normalLiborLoading || setNormalLibor.isPending}
+                      InputProps={{
+                        endAdornment: normalLiborLoading || setNormalLibor.isPending ? <CircularProgress size={20} /> : null
+                      }}
+                    />
+                  </CardContent>
+                </Card>
                 </Grid>
               </Grid>
             </Box>
           )}
 
-          {/* LIBOR Rates Tab */}
-          {activeTab === 1 && renderLiborRateManagement()}
+        {activeTab === 2 && (
+          <Box>
+            <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 3 }}>
+              System Logs
+                </Typography>
+            <TableContainer component={Paper}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Timestamp</TableCell>
+                    <TableCell>Event</TableCell>
+                    <TableCell>User</TableCell>
+                    <TableCell>Status</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {systemLogs.map((log) => (
+                    <TableRow key={log.id}>
+                      <TableCell>{log.timestamp}</TableCell>
+                      <TableCell>{log.event}</TableCell>
+                      <TableCell>{log.user}</TableCell>
+                      <TableCell>
+                        <Chip
+                          label={log.status}
+                          color={log.status === 'Success' ? 'success' : 'error'}
+                          size="small"
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Box>
+          )}
 
-          {/* Users Tab */}
-          {activeTab === 2 && renderUserManagement()}
-
-          {/* System Tab */}
-          {activeTab === 3 && (
+        {activeTab === 3 && (
+          <Box>
+            <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 3 }}>
+              System Settings
+            </Typography>
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={6}>
             <Card>
               <CardContent>
-                <Typography variant="h6" component="h2" sx={{ mb: 2 }}>
-                  System Information
+                    <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
+                      Customer Type
                 </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  System monitoring and maintenance features will be implemented here.
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={isSpecialCustomer}
+                          onChange={(e) => setCustomerType(e.target.checked ? 'Special' : 'Normal')}
+                        />
+                      }
+                      label="Special Customer"
+                    />
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                      Current type: {customerType}
                 </Typography>
               </CardContent>
             </Card>
+              </Grid>
+            </Grid>
+          </Box>
           )}
-
-          {/* Settings Tab */}
-          {activeTab === 4 && (
-            <Card>
-              <CardContent>
-                <Typography variant="h6" component="h2" sx={{ mb: 2 }}>
-                  Application Settings
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Configuration and settings management will be implemented here.
-                </Typography>
-              </CardContent>
-            </Card>
-          )}
-        </Box>
-      </Container>
 
       {/* User Dialog */}
       <Dialog open={userDialog} onClose={() => setUserDialog(false)} maxWidth="sm" fullWidth>
@@ -583,55 +546,51 @@ const Admin = () => {
           {editingUser ? 'Edit User' : 'Add New User'}
         </DialogTitle>
         <DialogContent>
-          <Box sx={{ pt: 2 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
             <TextField
+                label="Username"
+                value={userForm.username}
+                onChange={(e) => setUserForm(prev => ({ ...prev, username: e.target.value }))}
               fullWidth
-              label="Name"
-              value={userForm.name}
-              onChange={(e) => setUserForm(prev => ({ ...prev, name: e.target.value }))}
-              margin="normal"
-              required
             />
             <TextField
-              fullWidth
               label="Email"
               type="email"
               value={userForm.email}
               onChange={(e) => setUserForm(prev => ({ ...prev, email: e.target.value }))}
-              margin="normal"
-              required
-            />
-            <FormControl fullWidth margin="normal">
-              <InputLabel>Status</InputLabel>
-              <Select
-                value={userForm.status}
-                label="Status"
-                onChange={(e) => setUserForm(prev => ({ ...prev, status: e.target.value as any }))}
-              >
-                <MenuItem value="Active">Active</MenuItem>
-                <MenuItem value="Inactive">Inactive</MenuItem>
-                <MenuItem value="Suspended">Suspended</MenuItem>
-              </Select>
-            </FormControl>
-            <FormControl fullWidth margin="normal">
-              <InputLabel>Customer Type</InputLabel>
-              <Select
-                value={userForm.customerType}
-                label="Customer Type"
-                onChange={(e) => setUserForm(prev => ({ ...prev, customerType: e.target.value as any }))}
-              >
-                <MenuItem value="Normal">Normal</MenuItem>
-                <MenuItem value="Special">Special</MenuItem>
-              </Select>
-            </FormControl>
+                fullWidth
+              />
+              <TextField
+                label="First Name"
+                value={userForm.firstName}
+                onChange={(e) => setUserForm(prev => ({ ...prev, firstName: e.target.value }))}
+                fullWidth
+              />
+              <TextField
+                label="Last Name"
+                value={userForm.lastName}
+                onChange={(e) => setUserForm(prev => ({ ...prev, lastName: e.target.value }))}
+                fullWidth
+              />
+              {!editingUser && (
+                <TextField
+                  label="Password"
+                  type="password"
+                  value={userForm.password}
+                  onChange={(e) => setUserForm(prev => ({ ...prev, password: e.target.value }))}
+                  fullWidth
+                />
+              )}
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setUserDialog(false)} startIcon={<Cancel />}>
-            Cancel
-          </Button>
-          <Button onClick={handleSaveUser} variant="contained" startIcon={<Save />}>
-            {editingUser ? 'Update' : 'Create'}
+            <Button onClick={() => setUserDialog(false)}>Cancel</Button>
+            <Button 
+              onClick={handleSaveUser} 
+              variant="contained"
+              disabled={createUser.isPending || updateUser.isPending}
+            >
+              {createUser.isPending || updateUser.isPending ? <CircularProgress size={20} /> : 'Save'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -640,15 +599,13 @@ const Admin = () => {
       <Snackbar
         open={snackbar.open}
         autoHideDuration={6000}
-        onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+          onClose={handleCloseSnackbar}
       >
-        <Alert 
-          onClose={() => setSnackbar(prev => ({ ...prev, open: false }))} 
-          severity={snackbar.severity}
-        >
+          <Alert onClose={handleCloseSnackbar} severity={snackbar.severity}>
           {snackbar.message}
         </Alert>
       </Snackbar>
+      </Container>
     </Box>
   );
 };

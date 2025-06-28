@@ -18,7 +18,7 @@ import {
   Visibility, 
   VisibilityOff,
   Google,
-  Email,
+  Person,
   Lock,
   ArrowBack
 } from '@mui/icons-material';
@@ -26,7 +26,7 @@ import { Link as RouterLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 
 const Login = () => {
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
@@ -44,14 +44,27 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      const success = await login(email, password);
+      const success = await login(username, password);
       if (success) {
         navigate(from, { replace: true });
       } else {
-        setError('Invalid email or password');
+        setError('Invalid username or password. Please check your credentials and try again.');
       }
-    } catch (error) {
-      setError('An error occurred during login');
+    } catch (error: any) {
+      console.error('Login error:', error);
+      
+      // Provide more specific error messages
+      if (error.response?.status === 401) {
+        setError('Invalid username or password. Please check your credentials.');
+      } else if (error.response?.status === 400) {
+        setError('Invalid request. Please check your input.');
+      } else if (error.response?.status >= 500) {
+        setError('Server error. Please try again later.');
+      } else if (error.code === 'NETWORK_ERROR' || !error.response) {
+        setError('Network error. Please check your connection and ensure the backend server is running.');
+      } else {
+        setError('An unexpected error occurred. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -152,20 +165,20 @@ const Login = () => {
               <Divider sx={{ flex: 1 }} />
             </Box>
 
-            {/* Email/Password Form */}
+            {/* Username/Password Form */}
             <Box component="form" onSubmit={handleSubmit}>
               <TextField
                 fullWidth
-                label="Email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                label="Username"
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 required
                 margin="normal"
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
-                      <Email color="action" />
+                      <Person color="action" />
                     </InputAdornment>
                   ),
                 }}

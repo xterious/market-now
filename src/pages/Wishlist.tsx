@@ -19,7 +19,9 @@ import {
   Tabs,
   Tab,
   IconButton,
-  InputAdornment
+  InputAdornment,
+  CircularProgress,
+  Alert
 } from '@mui/material';
 import { 
   TrendingUp, 
@@ -34,59 +36,76 @@ import {
   BarChart 
 } from '@mui/icons-material';
 import Navigation from "@/components/Navigation";
-import { useWishlist } from "@/contexts/WishlistContext";
+import { 
+  useStockWishlist, 
+  useNewsWishlist, 
+  useCurrencyWishlist,
+  useRemoveFromStockWishlist,
+  useRemoveFromNewsWishlist,
+  useRemoveFromCurrencyWishlist
+} from '@/hooks/useApi';
+import { useAuth } from '@/contexts/AuthContext';
 
 const Wishlist = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [tabValue, setTabValue] = useState(0);
-  const { wishlistItems, removeFromWishlist } = useWishlist();
+  const { user } = useAuth();
 
-  const stockWishlist = wishlistItems.filter(item => item.type === 'stock').map(item => ({
-    symbol: item.data.symbol,
-    name: item.data.name,
-    price: item.data.price,
-    change: item.data.change,
-    changePercent: item.data.changePercent,
-    targetPrice: item.data.price * 1.05, // Mock target price
-    addedDate: new Date(item.addedAt).toLocaleDateString()
-  }));
+  // API calls
+  const { data: stockWishlist, isLoading: stockLoading, error: stockError } = useStockWishlist(user?.username || '');
+  const { data: newsWishlist, isLoading: newsLoading, error: newsError } = useNewsWishlist(user?.username || '');
+  const { data: currencyWishlist, isLoading: currencyLoading, error: currencyError } = useCurrencyWishlist(user?.username || '');
 
-  const newsWishlist = wishlistItems.filter(item => item.type === 'news').map(item => ({
-    id: item.data.id,
-    title: item.data.title,
-    source: item.data.source || 'Unknown',
-    category: item.data.category || 'General',
-    addedDate: new Date(item.addedAt).toLocaleDateString(),
-    summary: item.data.summary || 'No summary available'
-  }));
+  // Mutations
+  const removeFromStockWishlist = useRemoveFromStockWishlist();
+  const removeFromNewsWishlist = useRemoveFromNewsWishlist();
+  const removeFromCurrencyWishlist = useRemoveFromCurrencyWishlist();
 
-  const currencyWishlist = wishlistItems.filter(item => item.type === 'currency').map(item => ({
-    pair: item.data.pair,
-    name: item.data.name,
-    rate: item.data.rate,
-    change: item.data.change,
-    changePercent: item.data.changePercent,
-    targetRate: item.data.rate * 1.02, // Mock target rate
-    addedDate: new Date(item.addedAt).toLocaleDateString()
-  }));
+  // Filter wishlist items by search term
+  const filteredStocks = stockWishlist?.favoriteStocks?.filter(stock => 
+    stock.toLowerCase().includes(searchTerm.toLowerCase())
+  ) || [];
 
-  const filteredStocks = stockWishlist.filter(stock => 
-    stock.symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    stock.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredNews = newsWishlist?.favoriteNews?.filter(news => 
+    news.toLowerCase().includes(searchTerm.toLowerCase())
+  ) || [];
 
-  const filteredNews = newsWishlist.filter(news => 
-    news.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    news.source.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredCurrency = currencyWishlist?.favoriteCurrencies?.filter(currency => 
+    currency.toLowerCase().includes(searchTerm.toLowerCase())
+  ) || [];
 
-  const filteredCurrency = currencyWishlist.filter(currency => 
-    currency.pair.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    currency.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const handleTabChange = (event, newValue) => {
+  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
+  };
+
+  const handleRemoveFromStockWishlist = async (stockSymbol: string) => {
+    if (!user?.username) return;
+
+    try {
+      await removeFromStockWishlist.mutateAsync({ stockSymbol });
+    } catch (error) {
+      console.error('Failed to remove from stock wishlist:', error);
+    }
+  };
+
+  const handleRemoveFromNewsWishlist = async (newsItem: string) => {
+    if (!user?.username) return;
+
+    try {
+      await removeFromNewsWishlist.mutateAsync({ newsItem });
+    } catch (error) {
+      console.error('Failed to remove from news wishlist:', error);
+    }
+  };
+
+  const handleRemoveFromCurrencyWishlist = async (currencyCode: string) => {
+    if (!user?.username) return;
+
+    try {
+      await removeFromCurrencyWishlist.mutateAsync({ currencyCode });
+    } catch (error) {
+      console.error('Failed to remove from currency wishlist:', error);
+    }
   };
 
   const renderStockTable = () => (
@@ -105,39 +124,32 @@ const Wishlist = () => {
         </TableHead>
         <TableBody>
           {filteredStocks.map((stock) => (
-            <TableRow key={stock.symbol}>
-              <TableCell sx={{ fontWeight: 'bold' }}>{stock.symbol}</TableCell>
+            <TableRow key={stock}>
+              <TableCell sx={{ fontWeight: 'bold' }}>{stock}</TableCell>
               <TableCell sx={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {stock.name}
+                {stock} Inc.
               </TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }}>${stock.price}</TableCell>
+              <TableCell sx={{ fontWeight: 'bold' }}>$0.00</TableCell>
               <TableCell>
                 <Chip
-                  icon={stock.change >= 0 ? <TrendingUp /> : <TrendingDown />}
-                  label={`${stock.changePercent > 0 ? '+' : ''}${stock.changePercent}%`}
-                  color={stock.change >= 0 ? "success" : "error"}
+                  icon={<TrendingUp />}
+                  label="+0.00%"
+                  color="success"
                   size="small"
                 />
               </TableCell>
               <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Typography variant="body2">${stock.targetPrice.toFixed(2)}</Typography>
-                  {stock.price >= stock.targetPrice && (
-                    <Chip
-                      icon={<Notifications />}
-                      label="Hit"
-                      color="success"
-                      size="small"
-                    />
-                  )}
+                  <Typography variant="body2">$0.00</Typography>
                 </Box>
               </TableCell>
-              <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>{stock.addedDate}</TableCell>
+              <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>Today</TableCell>
               <TableCell>
                 <IconButton 
                   size="small"
-                  onClick={() => removeFromWishlist(stock.symbol)}
+                  onClick={() => handleRemoveFromStockWishlist(stock)}
                   color="error"
+                  disabled={removeFromStockWishlist.isPending}
                 >
                   <Delete />
                 </IconButton>
@@ -163,20 +175,21 @@ const Wishlist = () => {
         </TableHead>
         <TableBody>
           {filteredNews.map((news) => (
-            <TableRow key={news.id}>
+            <TableRow key={news}>
               <TableCell sx={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {news.title}
+                {news}
               </TableCell>
-              <TableCell>{news.source}</TableCell>
+              <TableCell>Unknown</TableCell>
               <TableCell>
-                <Chip label={news.category} size="small" variant="outlined" />
+                <Chip label="General" size="small" variant="outlined" />
               </TableCell>
-              <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>{news.addedDate}</TableCell>
+              <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>Today</TableCell>
               <TableCell>
                 <IconButton 
                   size="small"
-                  onClick={() => removeFromWishlist(news.id.toString())}
+                  onClick={() => handleRemoveFromNewsWishlist(news)}
                   color="error"
+                  disabled={removeFromNewsWishlist.isPending}
                 >
                   <Delete />
                 </IconButton>
@@ -203,36 +216,29 @@ const Wishlist = () => {
         </TableHead>
         <TableBody>
           {filteredCurrency.map((currency) => (
-            <TableRow key={currency.pair}>
-              <TableCell sx={{ fontWeight: 'bold' }}>{currency.pair}</TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }}>{currency.rate}</TableCell>
+            <TableRow key={currency}>
+              <TableCell sx={{ fontWeight: 'bold' }}>{currency}</TableCell>
+              <TableCell sx={{ fontWeight: 'bold' }}>0.0000</TableCell>
               <TableCell>
                 <Chip
-                  icon={currency.change >= 0 ? <TrendingUp /> : <TrendingDown />}
-                  label={`${currency.changePercent > 0 ? '+' : ''}${currency.changePercent}%`}
-                  color={currency.change >= 0 ? "success" : "error"}
+                  icon={<TrendingUp />}
+                  label="+0.00%"
+                  color="success"
                   size="small"
                 />
               </TableCell>
               <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Typography variant="body2">{currency.targetRate.toFixed(4)}</Typography>
-                  {currency.rate >= currency.targetRate && (
-                    <Chip
-                      icon={<Notifications />}
-                      label="Hit"
-                      color="success"
-                      size="small"
-                    />
-                  )}
+                  <Typography variant="body2">0.0000</Typography>
                 </Box>
               </TableCell>
-              <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>{currency.addedDate}</TableCell>
+              <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>Today</TableCell>
               <TableCell>
                 <IconButton 
                   size="small"
-                  onClick={() => removeFromWishlist(currency.pair)}
+                  onClick={() => handleRemoveFromCurrencyWishlist(currency)}
                   color="error"
+                  disabled={removeFromCurrencyWishlist.isPending}
                 >
                   <Delete />
                 </IconButton>
@@ -244,38 +250,54 @@ const Wishlist = () => {
     </TableContainer>
   );
 
-  const renderEmptyState = (type, icon) => (
-    <Box sx={{ textAlign: 'center', py: 6 }}>
+  const renderEmptyState = (type: string, icon: React.ReactNode) => (
+    <Box sx={{ textAlign: 'center', py: 8 }}>
+      <Box sx={{ mb: 2 }}>
       {icon}
-      <Typography variant="h6" component="h3" sx={{ mb: 1, mt: 2 }}>
-        No {type} found
+      </Box>
+      <Typography variant="h6" sx={{ mb: 1 }}>
+        No {type} in your wishlist
       </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        {searchTerm ? `No ${type} match your search criteria.` : `Your ${type} watchlist is empty.`}
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+        Start adding {type} to your wishlist to track them here
       </Typography>
+      <Button variant="contained" startIcon={<Add />}>
+        Browse {type}
+      </Button>
     </Box>
   );
+
+  if (stockError || newsError || currencyError) {
+    return (
+      <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
+        <Navigation />
+        <Container maxWidth="lg" sx={{ py: 4 }}>
+          <Alert severity="error" sx={{ mb: 2 }}>
+            Failed to load wishlist data. Please try again later.
+          </Alert>
+        </Container>
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
       <Navigation />
-      
       <Container maxWidth="lg" sx={{ py: 4 }}>
         <Box sx={{ mb: 4 }}>
           <Typography variant="h3" component="h1" sx={{ fontWeight: 'bold', mb: 1 }}>
-            My Watchlist
+            My Wishlist
           </Typography>
           <Typography variant="body1" color="text.secondary">
-            Track your favorite stocks, news, and currency exchanges
+            Track your favorite stocks, news, and currencies
           </Typography>
         </Box>
 
-        {/* Search */}
-        <Card sx={{ mb: 4 }}>
-          <CardContent sx={{ pt: 3 }}>
+        {/* Search Bar */}
+        <Box sx={{ mb: 3 }}>
             <TextField
               fullWidth
-              placeholder="Search your watchlist..."
+            placeholder="Search your wishlist..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               InputProps={{
@@ -285,96 +307,60 @@ const Wishlist = () => {
                   </InputAdornment>
                 ),
               }}
-            />
-          </CardContent>
-        </Card>
+            sx={{ maxWidth: 600 }}
+          />
+        </Box>
 
-        {/* Categorized Watchlist Tabs */}
-        <Box sx={{ mb: 4 }}>
-          <Tabs value={tabValue} onChange={handleTabChange} sx={{ mb: 3 }}>
-            <Tab 
-              label={`Stocks (${stockWishlist.length})`}
-              icon={<BarChart />}
-              iconPosition="start"
-            />
-            <Tab 
-              label={`News (${newsWishlist.length})`}
-              icon={<Article />}
-              iconPosition="start"
-            />
-            <Tab 
-              label={`Currency (${currencyWishlist.length})`}
-              icon={<AttachMoney />}
-              iconPosition="start"
-            />
+        {/* Tabs */}
+        <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+          <Tabs value={tabValue} onChange={handleTabChange}>
+            <Tab label={`Stocks (${filteredStocks.length})`} />
+            <Tab label={`News (${filteredNews.length})`} />
+            <Tab label={`Currencies (${filteredCurrency.length})`} />
           </Tabs>
+        </Box>
 
-          {/* Stocks Tab */}
+        {/* Loading State */}
+        {(stockLoading || newsLoading || currencyLoading) && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+            <CircularProgress />
+          </Box>
+        )}
+
+        {/* Tab Content */}
+        {!stockLoading && !newsLoading && !currencyLoading && (
+          <>
           {tabValue === 0 && (
-            <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                  <Star sx={{ color: 'warning.main', mr: 1 }} />
-                  <Typography variant="h6" component="h2">
-                    Stock Watchlist
-                  </Typography>
-                </Box>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                  Your favorite stocks with price alerts
-                </Typography>
+              <Box>
                 {filteredStocks.length === 0 ? (
-                  renderEmptyState('stocks', <BarChart sx={{ fontSize: 48, color: 'text.disabled' }} />)
+                  renderEmptyState('stocks', <BarChart sx={{ fontSize: 64, color: 'grey.400' }} />)
                 ) : (
                   renderStockTable()
                 )}
-              </CardContent>
-            </Card>
+              </Box>
           )}
 
-          {/* News Tab */}
           {tabValue === 1 && (
-            <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                  <Article sx={{ color: 'primary.main', mr: 1 }} />
-                  <Typography variant="h6" component="h2">
-                    News Watchlist
-                  </Typography>
-                </Box>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                  Your saved news articles
-                </Typography>
+              <Box>
                 {filteredNews.length === 0 ? (
-                  renderEmptyState('news', <Article sx={{ fontSize: 48, color: 'text.disabled' }} />)
+                  renderEmptyState('news', <Article sx={{ fontSize: 64, color: 'grey.400' }} />)
                 ) : (
                   renderNewsTable()
                 )}
-              </CardContent>
-            </Card>
+              </Box>
           )}
 
-          {/* Currency Tab */}
           {tabValue === 2 && (
-            <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                  <AttachMoney sx={{ color: 'success.main', mr: 1 }} />
-                  <Typography variant="h6" component="h2">
-                    Currency Watchlist
-                  </Typography>
-                </Box>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                  Your favorite currency pairs
-                </Typography>
+              <Box>
                 {filteredCurrency.length === 0 ? (
-                  renderEmptyState('currency', <AttachMoney sx={{ fontSize: 48, color: 'text.disabled' }} />)
+                  renderEmptyState('currencies', <AttachMoney sx={{ fontSize: 64, color: 'grey.400' }} />)
                 ) : (
                   renderCurrencyTable()
                 )}
-              </CardContent>
-            </Card>
+              </Box>
+            )}
+          </>
           )}
-        </Box>
       </Container>
     </Box>
   );
