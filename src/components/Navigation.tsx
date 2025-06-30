@@ -9,7 +9,6 @@ import {
   useMediaQuery,
   Typography,
   Container,
-  Avatar,
   Menu,
   MenuItem,
   IconButton
@@ -24,7 +23,6 @@ import {
   AccountCircle,
   Logout
 } from '@mui/icons-material';
-import ThemeToggle from "@/components/ThemeToggle";
 import CustomerTypeIndicator from "@/components/CustomerTypeIndicator";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -117,8 +115,6 @@ const Navigation = () => {
             <CustomerTypeIndicator size="small" showLabel={false} />
           </Box>
 
-          {/* Theme Toggle */}
-          <ThemeToggle />
 
           {/* Authentication Section */}
           <Box sx={{ ml: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -126,13 +122,8 @@ const Navigation = () => {
               <>
                 <IconButton
                   onClick={handleMenu}
-                  sx={{ color: 'inherit' }}
                 >
-                  {user?.avatar ? (
-                    <Avatar src={user.avatar} sx={{ width: 32, height: 32 }} />
-                  ) : (
-                    <AccountCircle />
-                  )}
+                    <AccountCircle fontSize='large' />
                 </IconButton>
                 <Menu
                   anchorEl={anchorEl}
@@ -150,7 +141,7 @@ const Navigation = () => {
                   <MenuItem disabled>
                     <Box>
                       <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                        {user?.name}
+                        {user?.username[0].toUpperCase() + user?.username.slice(1)}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
                         {user?.email}

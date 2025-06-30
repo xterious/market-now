@@ -50,21 +50,12 @@ export interface GrantedAuthority {
 }
 
 export interface Stock {
+  content: any[];
   symbol: string;
   currency: string;
   description: string;
   displaySymbol: string;
-  figi: string;
-  mic: string;
-  type: string;
   exchange: string;
-  currentPrice: number;
-  change: number;
-  percentChange: number;
-  high: number;
-  low: number;
-  open: number;
-  previousClose: number;
   timestamp: number;
 }
 

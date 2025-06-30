@@ -3,20 +3,10 @@ import { stocksAPI, newsAPI, currencyAPI, wishlistAPI, userAPI, adminAPI, aiAPI 
 import { useAuth } from '@/contexts/AuthContext';
 
 // Stock API hooks
-export const useStockQuote = (symbol: string, enabled: boolean = true) => {
+export const useStockSymbols = (exchange: string, page: number,query: string, size: number) => {
   return useQuery({
-    queryKey: ['stock', 'quote', symbol],
-    queryFn: () => stocksAPI.getStockQuote(symbol),
-    enabled: enabled && !!symbol,
-    staleTime: 30000, // 30 seconds
-    refetchInterval: 30000, // Auto-refresh every 30 seconds
-  });
-};
-
-export const useStockSymbols = (exchange: string, page: number = 0, size: number = 100) => {
-  return useQuery({
-    queryKey: ['stocks', 'symbols', exchange, page, size],
-    queryFn: () => stocksAPI.getStockSymbols(exchange, page, size),
+    queryKey: ['stocks', 'symbols', exchange, page, query, size],
+    queryFn: () => stocksAPI.getStockSymbols(exchange, page, query, size),
     enabled: !!exchange,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
