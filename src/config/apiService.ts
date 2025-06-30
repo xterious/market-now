@@ -12,7 +12,12 @@ import {
   NewsWishlist,
   CurrencyWishlist,
   Role,
-  RoleAssignmentRequest
+  RoleAssignmentRequest,
+  CurrencySymbol,
+  CurrencySymbolsResponse,
+  RoleBasedExchangeRate,
+  LiborRates,
+  CompleteRatesInfo
 } from './types';
 
 // Authentication API
@@ -110,6 +115,38 @@ export const newsAPI = {
 
 // Currency API
 export const currencyAPI = {
+  getCurrencySymbols: async (): Promise<CurrencySymbolsResponse> => {
+    const response = await api.get<CurrencySymbolsResponse>('/api/currency/symbols');
+    return response.data;
+  },
+
+  getRoleBasedExchangeRate: async (base: string, target: string): Promise<RoleBasedExchangeRate> => {
+    const response = await api.get<RoleBasedExchangeRate>('/api/currency/exchange/role-based', {
+      params: { base, target }
+    });
+    return response.data;
+  },
+
+  convertCurrencyRoleBased: async (base: string, target: string, amount: number): Promise<number> => {
+    const response = await api.get<number>('/api/currency/convert/role-based', {
+      params: { base, target, amount }
+    });
+    return response.data;
+  },
+
+  getLiborRates: async (): Promise<LiborRates> => {
+    const response = await api.get<LiborRates>('/api/currency/libor-rates');
+    return response.data;
+  },
+
+  getCompleteRatesInfo: async (base: string, target: string): Promise<CompleteRatesInfo> => {
+    const response = await api.get<CompleteRatesInfo>('/api/currency/rates-info', {
+      params: { base, target }
+    });
+    return response.data;
+  },
+
+  // Legacy methods for backward compatibility
   getExchangeRate: async (
     base: string,
     target: string,

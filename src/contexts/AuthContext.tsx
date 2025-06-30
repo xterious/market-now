@@ -66,6 +66,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
     localStorage.removeItem('accessToken');
     localStorage.removeItem('user');
+    // Dispatch custom logout event for other contexts
+    window.dispatchEvent(new CustomEvent('logout'));
     window.location.href = '/login';
   };
 

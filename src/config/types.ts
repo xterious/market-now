@@ -88,6 +88,13 @@ export interface CurrencyExchangeRate {
   customerType: string;
 }
 
+export interface CurrencySymbol {
+  code: string;
+  name: string;
+  symbol: string;
+  flag?: string;
+}
+
 export interface StockWishlist {
   username: string;
   favoriteStocks: string[];
@@ -129,4 +136,35 @@ export interface PaginatedResponse<T> {
   totalPages: number;
   size: number;
   number: number;
+}
+
+// New types for role-based LIBOR rates
+export interface RoleBasedExchangeRate {
+  id: string;
+  base: string;
+  target: string;
+  baseRate: number;
+  finalRate: number;
+  customerType: string;
+}
+
+export interface LiborRates {
+  id: string;
+  normalRate: number;
+  specialRate: number;
+}
+
+export interface CompleteRatesInfo {
+  base: string;
+  target: string;
+  userCustomerType: string;
+  normalRate: RoleBasedExchangeRate;
+  specialRate: RoleBasedExchangeRate;
+  liborRates: LiborRates;
+  currentUserRate: RoleBasedExchangeRate;
+}
+
+// Update CurrencySymbol to match backend response format
+export interface CurrencySymbolsResponse {
+  [key: string]: string; // e.g., "EUR": "Euro"
 } 

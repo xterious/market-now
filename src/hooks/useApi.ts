@@ -49,6 +49,60 @@ export const useNewsCategories = () => {
 };
 
 // Currency API hooks
+export const useCurrencySymbols = () => {
+  return useQuery({
+    queryKey: ['currency', 'symbols'],
+    queryFn: () => currencyAPI.getCurrencySymbols(),
+    staleTime: 30 * 60 * 1000, // 30 minutes - symbols don't change often
+    retry: 3, // Retry 3 times on failure
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Exponential backoff
+  });
+};
+
+export const useRoleBasedExchangeRate = (base: string, target: string) => {
+  return useQuery({
+    queryKey: ['currency', 'role-based-exchange', base, target],
+    queryFn: () => currencyAPI.getRoleBasedExchangeRate(base, target),
+    enabled: !!base && !!target,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: 2, // Retry 2 times on failure
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000), // Exponential backoff
+  });
+};
+
+export const useRoleBasedCurrencyConversion = (base: string, target: string, amount: number) => {
+  return useQuery({
+    queryKey: ['currency', 'role-based-convert', base, target, amount],
+    queryFn: () => currencyAPI.convertCurrencyRoleBased(base, target, amount),
+    enabled: !!base && !!target && amount > 0,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: 2, // Retry 2 times on failure
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000), // Exponential backoff
+  });
+};
+
+export const useLiborRates = () => {
+  return useQuery({
+    queryKey: ['currency', 'libor-rates'],
+    queryFn: () => currencyAPI.getLiborRates(),
+    staleTime: 10 * 60 * 1000, // 10 minutes
+    retry: 3, // Retry 3 times on failure
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Exponential backoff
+  });
+};
+
+export const useCompleteRatesInfo = (base: string, target: string) => {
+  return useQuery({
+    queryKey: ['currency', 'complete-rates-info', base, target],
+    queryFn: () => currencyAPI.getCompleteRatesInfo(base, target),
+    enabled: !!base && !!target,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: 2, // Retry 2 times on failure
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000), // Exponential backoff
+  });
+};
+
+// Legacy hooks for backward compatibility
 export const useExchangeRate = (base: string, target: string, customerType: string = 'normal') => {
   return useQuery({
     queryKey: ['currency', 'exchange', base, target, customerType],
@@ -221,14 +275,6 @@ export const useAllRoles = () => {
   return useQuery({
     queryKey: ['roles', 'all'],
     queryFn: () => adminAPI.getAllRoles(),
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  });
-};
-
-export const useLiborRates = () => {
-  return useQuery({
-    queryKey: ['libor', 'rates'],
-    queryFn: () => adminAPI.getLiborRates(),
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };

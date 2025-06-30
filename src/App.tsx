@@ -4,6 +4,7 @@ import { ThemeProvider } from "@/contexts/ThemeContext";
 import { WishlistProvider } from "@/contexts/WishlistContext";
 import { AdminAuthProvider } from "@/contexts/AdminAuthContext";
 import { CustomerProvider } from "@/contexts/CustomerContext";
+import { CurrencyProvider } from "@/contexts/CurrencyContext";
 import AuthWrapper from "@/components/AuthWrapper";
 import Chatbot from "@/components/Chatbot";
 import ProtectedRoute from "@/components/ProtectedRoute";
@@ -29,30 +30,32 @@ const App = () => (
         <AuthWrapper>
         <CustomerProvider>
           <WishlistProvider>
-            <AdminAuthProvider>
-                <Routes>
-                  <Route path="/" element={<Index />} />
-                  <Route path="/login" element={<Login />} />
-                  <Route path="/signup" element={<Signup />} />
-                  <Route path="/stocks" element={<Stocks />} />
-                  <Route path="/news" element={<News />} />
-                  <Route path="/currency" element={<Currency />} />
-                  <Route path="/wishlist" element={<Wishlist />} />
-                  <Route path="/settings" element={<Settings />} />
-                  <Route path="/admin/login" element={<AdminLogin />} />
-                  <Route 
-                    path="/admin" 
-                    element={
-                      <ProtectedRoute>
-                        <Admin />
-                      </ProtectedRoute>
-                    } 
-                  />
-                  {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
-                <Chatbot />
-            </AdminAuthProvider>
+            <CurrencyProvider>
+              <AdminAuthProvider>
+                  <Routes>
+                    <Route path="/" element={<Index />} />
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/signup" element={<Signup />} />
+                    <Route path="/stocks" element={<Stocks />} />
+                    <Route path="/news" element={<News />} />
+                    <Route path="/currency" element={<Currency />} />
+                    <Route path="/wishlist" element={<Wishlist />} />
+                    <Route path="/settings" element={<Settings />} />
+                    <Route path="/admin/login" element={<AdminLogin />} />
+                    <Route 
+                      path="/admin" 
+                      element={
+                        <ProtectedRoute>
+                          <Admin />
+                        </ProtectedRoute>
+                      } 
+                    />
+                    {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                  <Chatbot />
+              </AdminAuthProvider>
+            </CurrencyProvider>
           </WishlistProvider>
         </CustomerProvider>
         </AuthWrapper>
