@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authAPI } from '@/config/apiService';
+import { useNavigate } from 'react-router-dom';
 
 interface AdminAuthContextType {
   isAuthenticated: boolean;
@@ -19,6 +20,8 @@ export const useAdminAuth = () => {
 
 export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     // Check if admin is already authenticated
@@ -30,24 +33,23 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const login = async (username: string, password: string): Promise<boolean> => {
     try {
-      // Use the same auth API as regular users
       const response = await authAPI.login({ username, password });
-      
-      // Check if user has admin role
-      const hasAdminRole = response.roles.some(role => 
-        role.authority === 'ROLE_ADMIN' || role.authority === 'ADMIN'
-      );
-      
+      console.log(response);
+      const hasAdminRole = response.roles.some(role => role.authority === 'ROLE_ADMIN');
       if (hasAdminRole) {
-      setIsAuthenticated(true);
-      localStorage.setItem('adminAuth', 'true');
+        setIsAuthenticated(true);
+        localStorage.setItem('adminAuth', 'true');
         localStorage.setItem('accessToken', response.accessToken);
-      return true;
+        localStorage.setItem('adminUser', JSON.stringify({
+          username: response.username,
+          email: response.email,
+          roles: response.roles
+        }));
+        return true;
       } else {
-        console.error('User does not have admin privileges');
-        return false;
+        throw new Error('You do not have admin privileges.');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Admin login failed:', error);
       return false;
     }
@@ -57,6 +59,19 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setIsAuthenticated(false);
     localStorage.removeItem('adminAuth');
     localStorage.removeItem('accessToken');
+  };
+
+  const handleLogin = async (username: string, password: string) => {
+    try {
+      const success = await login(username, password);
+      if (success) {
+        navigate('/admin');
+      } else {
+        setError('Invalid username or password, or you do not have admin privileges.');
+      }
+    } catch (err: any) {
+      setError(err.message || 'An error occurred during login');
+    }
   };
 
   return (

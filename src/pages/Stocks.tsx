@@ -42,9 +42,8 @@ import {
 } from '@mui/icons-material';
 import Navigation from "@/components/Navigation";
 import StockChart from "@/components/StockChart";
-import { useWishlist } from "@/contexts/WishlistContext";
 import CustomerTypeIndicator from "@/components/CustomerTypeIndicator";
-import { useStockSymbols, useStockQuote, useAddToStockWishlist, useRemoveFromStockWishlist } from '@/hooks/useApi';
+import { useStockSymbols, useStockQuote, useAddToStockWishlist, useRemoveFromStockWishlist, useStockWishlist } from '@/hooks/useApi';
 import { useAuth } from '@/contexts/AuthContext';
 
 const Stocks = () => {
@@ -53,26 +52,32 @@ const Stocks = () => {
   const [tabValue, setTabValue] = useState(0);
   const [page, setPage] = useState(0); // API uses 0-based pagination
   const [openDialog, setOpenDialog] = useState(false);
-  const [selectedStockQuote, setSelectedStockQuote] = useState<any>(null);
   const { user } = useAuth();
   
   // API calls
   const { data: stockSymbolsData, isLoading: symbolsLoading, error: symbolsError } = useStockSymbols('NASDAQ', page, 20);
   const { data: stockQuote, isLoading: quoteLoading } = useStockQuote(selectedStock?.symbol || '', !!selectedStock);
   
-  // Wishlist mutations
+  // Wishlist data and mutations
+  const { data: stockWishlist } = useStockWishlist(user?.username || '');
   const addToWishlist = useAddToStockWishlist();
   const removeFromWishlist = useRemoveFromStockWishlist();
 
   const stocksPerPage = 20;
 
-  // Filter stocks by search term
-  const filteredStocks = stockSymbolsData?.content?.filter(stock => 
+  // Filter stocks by search term - handle single stock object or array
+  const filteredStocks = stockSymbolsData ? 
+    (Array.isArray(stockSymbolsData) ? stockSymbolsData : [stockSymbolsData]).filter(stock => 
     stock.symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
     stock.description?.toLowerCase().includes(searchTerm.toLowerCase())
-  ) || [];
+    ) : [];
 
-  const totalPages = stockSymbolsData ? Math.ceil(stockSymbolsData.totalElements / stocksPerPage) : 0;
+  const totalPages = 1; // Since we're getting single objects, pagination is simplified
+
+  // Check if a stock is in wishlist
+  const isInWishlist = (symbol: string) => {
+    return stockWishlist?.favoriteStocks?.includes(symbol) || false;
+  };
 
   const handleStockClick = async (stock: any) => {
     setSelectedStock(stock);
@@ -84,9 +89,9 @@ const Stocks = () => {
     if (!user?.username) return;
 
     try {
-      if (selectedStockQuote) {
+      if (isInWishlist(stock.symbol)) {
         await removeFromWishlist.mutateAsync({ stockSymbol: stock.symbol });
-    } else {
+      } else {
         await addToWishlist.mutateAsync({ stockSymbol: stock.symbol });
       }
     } catch (error) {
@@ -106,7 +111,6 @@ const Stocks = () => {
   const handleCloseDialog = () => {
     setOpenDialog(false);
     setSelectedStock(null);
-    setSelectedStockQuote(null);
   };
 
   const renderStockCards = (stocks: any[]) => (
@@ -147,16 +151,9 @@ const Stocks = () => {
               <IconButton 
                 size="small"
                 onClick={(e) => handleAddToWishlist(stock, e)}
-                color={selectedStockQuote ? "error" : "default"}
-                disabled={addToWishlist.isPending || removeFromWishlist.isPending}
-                sx={{ 
-                  '&:hover': { 
-                    transform: 'scale(1.1)',
-                    transition: 'transform 0.2s ease'
-                  }
-                }}
+                sx={{ color: isInWishlist(stock.symbol) ? 'error.main' : 'grey.400', '&:hover': { color: 'error.main' }, '&.Mui-disabled': { color: isInWishlist(stock.symbol) ? 'error.main' : 'grey.400' } }}
               >
-                {selectedStockQuote ? <Favorite /> : <FavoriteBorder />}
+                {isInWishlist(stock.symbol) ? <Favorite /> : <FavoriteBorder />}
               </IconButton>
             </Box>
             <Typography variant="h5" component="p" sx={{ fontWeight: 'bold', mb: 1 }}>

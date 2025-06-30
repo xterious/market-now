@@ -11,7 +11,8 @@ import {
   StockWishlist,
   NewsWishlist,
   CurrencyWishlist,
-  PaginatedResponse
+  Role,
+  RoleAssignmentRequest
 } from './types';
 
 // Authentication API
@@ -25,6 +26,11 @@ export const authAPI = {
 
   register: async (userData: RegisterRequest): Promise<User> => {
     const response = await api.post<User>('/api/auth/register', userData);
+    return response.data;
+  },
+
+  registerAdmin: async (userData: RegisterRequest): Promise<User> => {
+    const response = await api.post<User>('/api/auth/register/admin', userData);
     return response.data;
   },
 };
@@ -67,8 +73,8 @@ export const stocksAPI = {
     exchange: string,
     page: number = 0,
     size: number = 100
-  ): Promise<PaginatedResponse<Stock>> => {
-    const response = await api.get<PaginatedResponse<Stock>>('/api/stocks/symbols', {
+  ): Promise<Stock> => {
+    const response = await api.get<Stock>('/api/stocks/symbols', {
       params: { exchange, page, size }
     });
     return response.data;
@@ -96,8 +102,8 @@ export const newsAPI = {
     return response.data;
   },
 
-  getAllCategories: async (): Promise<string[]> => {
-    const response = await api.get<string[]>('/api/news/categories');
+  getAllCategories: async (): Promise<string> => {
+    const response = await api.get<string>('/api/news/categories');
     return response.data;
   },
 };
@@ -194,13 +200,19 @@ export const aiAPI = {
 
 // Admin API
 export const adminAPI = {
+  // User management
   getAllUsers: async (): Promise<User[]> => {
     const response = await api.get<User[]>('/api/admin/users');
     return response.data;
   },
 
-  createUser: async (userData: User): Promise<User> => {
+  createUser: async (userData: RegisterRequest): Promise<User> => {
     const response = await api.post<User>('/api/admin/users', userData);
+    return response.data;
+  },
+
+  createAdminUser: async (userData: RegisterRequest): Promise<User> => {
+    const response = await api.post<User>('/api/admin/users/admin', userData);
     return response.data;
   },
 
@@ -209,7 +221,7 @@ export const adminAPI = {
     return response.data;
   },
 
-  updateUser: async (id: string, userData: User): Promise<User> => {
+  updateUser: async (id: string, userData: UserDTO): Promise<User> => {
     const response = await api.put<User>(`/api/admin/users/${id}`, userData);
     return response.data;
   },
@@ -218,6 +230,77 @@ export const adminAPI = {
     await api.delete(`/api/admin/users/${id}`);
   },
 
+  // User filtering by role
+  getNormalUsers: async (): Promise<User[]> => {
+    const response = await api.get<User[]>('/api/admin/users/normal');
+    return response.data;
+  },
+
+  getSpecialUsers: async (): Promise<User[]> => {
+    const response = await api.get<User[]>('/api/admin/users/special');
+    return response.data;
+  },
+
+  getUsersByRole: async (roleName: string): Promise<User[]> => {
+    const response = await api.get<User[]>(`/api/admin/users/roles/${roleName}`);
+    return response.data;
+  },
+
+  // Role management
+  getAllRoles: async (): Promise<Role[]> => {
+    const response = await api.get<Role[]>('/api/admin/roles');
+    return response.data;
+  },
+
+  createRole: async (role: Role): Promise<Role> => {
+    const response = await api.post<Role>('/api/admin/roles', role);
+    return response.data;
+  },
+
+  deleteRole: async (roleId: string): Promise<void> => {
+    await api.delete(`/api/admin/roles/${roleId}`);
+  },
+
+  // User role management
+  assignRoleToUser: async (userId: string, roleName: string): Promise<User> => {
+    const response = await api.post<User>(`/api/admin/users/${userId}/roles`, null, {
+      params: { roleName }
+    });
+    return response.data;
+  },
+
+  setUserRole: async (userId: string, role: string): Promise<User> => {
+    const response = await api.put<User>(`/api/admin/users/${userId}/role`, null, {
+      params: { role }
+    });
+    return response.data;
+  },
+
+  setUserRoles: async (userId: string, roles: Role[]): Promise<User> => {
+    const response = await api.put<User>(`/api/admin/users/${userId}/roles`, roles);
+    return response.data;
+  },
+
+  assignRolesBulk: async (roleAssignment: RoleAssignmentRequest): Promise<User> => {
+    const response = await api.post<User>('/api/admin/users/roles/bulk', roleAssignment);
+    return response.data;
+  },
+
+  // LIBOR rate management
+  getLiborRates: async (): Promise<any[]> => {
+    const response = await api.get<any[]>('/api/admin/libor');
+    return response.data;
+  },
+
+  updateLiborRates: async (liborData: any): Promise<void> => {
+    await api.put('/api/admin/libor', liborData);
+  },
+
+  deleteLiborRate: async (id: string): Promise<void> => {
+    await api.delete(`/api/admin/libor/${id}`);
+  },
+
+  // Individual LIBOR spread management (legacy endpoints)
   getLiborSpreadSpecial: async (): Promise<number> => {
     const response = await api.get<number>('/api/admin/libor/special');
     return response.data;

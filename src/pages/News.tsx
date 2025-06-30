@@ -1,11 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Card, 
   CardContent, 
   Typography, 
   Box, 
   Container, 
-  Grid, 
   Button,
   Chip,
   IconButton,
@@ -16,19 +15,40 @@ import {
   Tooltip,
   TextField,
   Alert,
-  CircularProgress
+  CircularProgress,
+  Tabs,
+  Tab,
+  InputAdornment,
+  Skeleton,
+  Avatar,
+  Badge,
+  Fade,
+  Slide
 } from '@mui/material';
+import Grid from '@mui/material/Grid';
 import { 
   Star,
   StarBorder,
   NotificationsNone,
   OpenInNew,
   Close,
-  Search
+  Search,
+  TrendingUp,
+  Business,
+  CurrencyExchange,
+  Public,
+  FilterList,
+  Refresh,
+  Bookmark,
+  Share,
+  AccessTime,
+  Source,
+  SmartToy
 } from '@mui/icons-material';
 import Navigation from '@/components/Navigation';
-import { useTopHeadlines, useNewsByCategory, useNewsCategories, useAddToNewsWishlist, useRemoveFromNewsWishlist } from '@/hooks/useApi';
+import { useTopHeadlines, useNewsByCategory, useNewsCategories, useAddToNewsWishlist, useRemoveFromNewsWishlist, useNewsWishlist } from '@/hooks/useApi';
 import { useAuth } from '@/contexts/AuthContext';
+import type { News } from '@/config/types';
 
 function timeAgo(unix: number) {
   const now = Date.now() / 1000;
@@ -41,18 +61,29 @@ function timeAgo(unix: number) {
   return `${days} days ago`;
 }
 
-const News = () => {
-  const [selected, setSelected] = useState<any>(null);
+const NewsPage = () => {
+  const [selected, setSelected] = useState<News | null>(null);
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('general');
+  const [activeTab, setActiveTab] = useState(0);
+  const [showSearch, setShowSearch] = useState(false);
   const { user } = useAuth();
+
+  // Predefined categories
+  const predefinedCategories = [
+    { key: 'general', label: 'General', icon: <Public />, color: '#1976d2' },
+    { key: 'merger', label: 'Merger & Acquisition', icon: <Business />, color: '#2e7d32' },
+    { key: 'currency', label: 'Currency', icon: <CurrencyExchange />, color: '#ed6c02' },
+    { key: 'forex', label: 'Forex', icon: <TrendingUp />, color: '#9c27b0' }
+  ];
 
   // API calls
   const { data: headlines, isLoading: headlinesLoading, error: headlinesError } = useTopHeadlines();
   const { data: categoryNews, isLoading: categoryLoading, error: categoryError } = useNewsByCategory(selectedCategory);
   const { data: categories, isLoading: categoriesLoading } = useNewsCategories();
 
-  // Wishlist mutations
+  // Wishlist data and mutations
+  const { data: newsWishlist } = useNewsWishlist(user?.username || '');
   const addToWishlist = useAddToNewsWishlist();
   const removeFromWishlist = useRemoveFromNewsWishlist();
 
@@ -63,39 +94,61 @@ const News = () => {
 
   // Filter news by search
   const filteredNews = newsData?.filter(news => {
-    const matchesSearch =
-      news.headline.toLowerCase().includes(search.toLowerCase()) ||
-      news.summary.toLowerCase().includes(search.toLowerCase());
-    return matchesSearch;
+    if (!search.trim()) return true;
+    const searchLower = search.toLowerCase();
+    return (
+      news.headline?.toLowerCase().includes(searchLower) ||
+      news.summary?.toLowerCase().includes(searchLower) ||
+      news.source?.toLowerCase().includes(searchLower) ||
+      news.category?.toLowerCase().includes(searchLower)
+    );
   }) || [];
+
+  // Check if a news item is in wishlist
+  const isInWishlist = (newsId: string) => {
+    return newsWishlist?.favoriteNews?.includes(newsId) || false;
+  };
 
   const handleAddToWishlist = async (newsItem: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!user?.username) return;
 
     try {
-      await addToWishlist.mutateAsync({ newsItem });
+      if (isInWishlist(newsItem)) {
+        await removeFromWishlist.mutateAsync({ newsItem });
+      } else {
+        await addToWishlist.mutateAsync({ newsItem });
+      }
     } catch (error) {
-      console.error('Failed to add to wishlist:', error);
+      console.error('Failed to update wishlist:', error);
     }
   };
 
-  const handleRemoveFromWishlist = async (newsItem: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!user?.username) return;
+  const handleCategoryChange = (category: string) => {
+    setSelectedCategory(category);
+    setActiveTab(predefinedCategories.findIndex(cat => cat.key === category));
+  };
 
-    try {
-      await removeFromWishlist.mutateAsync({ newsItem });
-    } catch (error) {
-      console.error('Failed to remove from wishlist:', error);
-    }
+  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+    setActiveTab(newValue);
+    setSelectedCategory(predefinedCategories[newValue].key);
+  };
+
+  const getCategoryColor = (category: string) => {
+    const cat = predefinedCategories.find(c => c.key === category);
+    return cat?.color || '#1976d2';
+  };
+
+  const getCategoryIcon = (category: string) => {
+    const cat = predefinedCategories.find(c => c.key === category);
+    return cat?.icon || <Public />;
   };
 
   if (error) {
     return (
       <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
         <Navigation />
-        <Container maxWidth="md" sx={{ py: 4 }}>
+        <Container maxWidth="lg" sx={{ py: 4 }}>
           <Alert severity="error" sx={{ mb: 2 }}>
             Failed to load news. Please try again later.
           </Alert>
@@ -107,215 +160,515 @@ const News = () => {
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
       <Navigation />
-      <Container maxWidth="md" sx={{ py: 4 }}>
-        <Typography variant="h4" sx={{ fontWeight: 'bold', mb: 3, color: 'primary.main' }}>
-          News & Insights
+      <Container maxWidth="lg" sx={{ py: 4 }}>
+        {/* Header */}
+        <Box sx={{ mb: 4 }}>
+          <Typography variant="h3" sx={{ fontWeight: 'bold', mb: 1, color: 'primary.main' }}>
+            Financial News & Insights
           </Typography>
-
-        {/* Category Buttons & Search */}
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 3, alignItems: 'center' }}>
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <Button
-              variant={selectedCategory === 'general' ? 'contained' : 'outlined'}
-              color={selectedCategory === 'general' ? 'primary' : 'inherit'}
-              onClick={() => setSelectedCategory('general')}
-              sx={{ textTransform: 'none', fontWeight: 600, borderRadius: 2 }}
-            >
-              All News
-            </Button>
-            {categories?.map(cat => (
-              <Button
-                key={cat}
-                variant={selectedCategory === cat ? 'contained' : 'outlined'}
-                color={selectedCategory === cat ? 'primary' : 'inherit'}
-                onClick={() => setSelectedCategory(cat)}
-                sx={{ textTransform: 'none', fontWeight: 600, borderRadius: 2 }}
-              >
-                {cat.charAt(0).toUpperCase() + cat.slice(1)}
-              </Button>
-            ))}
+          <Typography variant="body1" color="text.secondary">
+            Stay updated with the latest market news, mergers, currency updates, and forex insights
+          </Typography>
         </Box>
-          <Box sx={{ flex: 1, minWidth: 200, display: 'flex', justifyContent: 'flex-end' }}>
-            <Box sx={{ position: 'relative', width: { xs: '100%', sm: 260 } }}>
+
+        {/* Search Bar */}
+        <Box sx={{ mb: 3 }}>
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+            <Box sx={{ flex: 1, minWidth: 300 }}>
               <TextField
-                size="small"
-                placeholder="Search news..."
+                fullWidth
+                placeholder="Search news by headline, summary, or source..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 InputProps={{
-                  startAdornment: <Search sx={{ color: 'grey.500', mr: 1 }} />,
-                  sx: { borderRadius: 2, bgcolor: 'background.paper' }
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Search sx={{ color: 'grey.500' }} />
+                    </InputAdornment>
+                  ),
+                  endAdornment: search && (
+                    <InputAdornment position="end">
+                      <IconButton size="small" onClick={() => setSearch('')}>
+                        <Close />
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                  sx: { 
+                    borderRadius: 3, 
+                    bgcolor: 'background.paper',
+                    '&:hover': { bgcolor: 'grey.50' },
+                    '&.Mui-focused': { bgcolor: 'background.paper' }
+                  }
                 }}
-                fullWidth
+                size="medium"
               />
             </Box>
+            <Button
+              variant="outlined"
+              startIcon={<FilterList />}
+              onClick={() => setShowSearch(!showSearch)}
+              sx={{ borderRadius: 2 }}
+            >
+              Filters
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<Refresh />}
+              onClick={() => window.location.reload()}
+              sx={{ borderRadius: 2 }}
+            >
+              Refresh
+            </Button>
           </Box>
         </Box>
 
+        {/* Category Tabs */}
+        <Box sx={{ mb: 4 }}>
+          <Tabs 
+            value={activeTab} 
+            onChange={handleTabChange}
+            variant="scrollable"
+            scrollButtons="auto"
+            sx={{
+              '& .MuiTab-root': {
+                textTransform: 'none',
+                fontWeight: 600,
+                fontSize: '1rem',
+                minHeight: 56,
+                borderRadius: 2,
+                mx: 0.5,
+                '&.Mui-selected': {
+                  bgcolor: 'primary.main',
+                  color: 'white',
+                  '&:hover': {
+                    bgcolor: 'primary.dark',
+                  }
+                }
+              }
+            }}
+          >
+            {predefinedCategories.map((category, index) => (
+              <Tab
+                key={category.key}
+                label={
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    {category.icon}
+                    {category.label}
+                  </Box>
+                }
+                sx={{
+                  '&.Mui-selected': {
+                    bgcolor: category.color,
+                    '&:hover': {
+                      bgcolor: category.color,
+                      opacity: 0.9
+                    }
+                  }
+                }}
+              />
+            ))}
+          </Tabs>
+        </Box>
+
+        {/* Results Summary */}
+        {!isLoading && (
+          <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Typography variant="body2" color="text.secondary">
+              {filteredNews.length} {filteredNews.length === 1 ? 'article' : 'articles'} found
+            </Typography>
+            {search && (
+              <Chip 
+                label={`Search: "${search}"`} 
+                size="small" 
+                onDelete={() => setSearch('')}
+                color="primary"
+                variant="outlined"
+              />
+            )}
+            <Chip 
+              label={predefinedCategories.find(cat => cat.key === selectedCategory)?.label || 'All News'} 
+              size="small" 
+              color="primary"
+              icon={getCategoryIcon(selectedCategory)}
+            />
+          </Box>
+        )}
+
         {/* Loading State */}
         {isLoading && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-            <CircularProgress />
-          </Box>
+          <Grid container spacing={3}>
+            {[1, 2, 3, 4, 5, 6].map((item) => (
+              <Grid item xs={12} sm={6} md={4} key={item}>
+                <Card sx={{ borderRadius: 3, overflow: 'hidden' }}>
+                  <Skeleton variant="rectangular" height={200} />
+                  <CardContent>
+                    <Skeleton variant="text" width="60%" height={20} sx={{ mb: 1 }} />
+                    <Skeleton variant="text" width="100%" height={24} sx={{ mb: 1 }} />
+                    <Skeleton variant="text" width="90%" height={16} sx={{ mb: 1 }} />
+                    <Skeleton variant="text" width="70%" height={16} />
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
         )}
 
         {/* News Grid */}
         {!isLoading && (
-        <Grid container spacing={3}>
-          {filteredNews.length === 0 ? (
-            <Grid item xs={12}>
-              <Typography variant="body1" color="text.secondary" align="center" sx={{ py: 6 }}>
-                  {search ? 'No news found for your search.' : 'No news available for this category.'}
-              </Typography>
-            </Grid>
-          ) : (
-            filteredNews.map(news => (
-                <Grid item xs={12} sm={6} key={news.newsId}>
-                  <Card sx={{ 
-                    bgcolor: 'background.paper', 
-                    borderRadius: 3, 
-                    boxShadow: 4, 
-                    cursor: 'pointer', 
-                    transition: '0.2s', 
-                    '&:hover': { boxShadow: 8 } 
-                  }} 
-                  onClick={() => setSelected(news)}
-                  >
-                    <Box sx={{ 
-                      height: 180, 
-                      background: news.image ? `url(${news.image}) center/cover` : 'linear-gradient(45deg, #667eea, #764ba2)',
-                      borderTopLeftRadius: 12, 
-                      borderTopRightRadius: 12 
-                    }} />
-                  <CardContent>
-                      <Chip 
-                        label={news.category?.replace(/\b\w/g, l => l.toUpperCase()) || 'General'} 
-                        size="small" 
-                        sx={{ mb: 1, bgcolor: 'grey.900', color: 'grey.100', fontWeight: 600 }} 
-                      />
-                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1, minHeight: 48 }}>
-                      {news.headline}
+          <Fade in={!isLoading} timeout={500}>
+            <Grid container spacing={3}>
+              {filteredNews.length === 0 ? (
+                <Grid item xs={12}>
+                  <Box sx={{ textAlign: 'center', py: 8 }}>
+                    <Search sx={{ fontSize: 64, color: 'grey.400', mb: 2 }} />
+                    <Typography variant="h6" color="text.secondary" gutterBottom>
+                      {search ? 'No news found for your search.' : 'No news available for this category.'}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2, minHeight: 40 }}>
-                        {news.summary && news.summary.length > 80 ? news.summary.slice(0, 80) + '...' : news.summary || 'No summary available'}
+                    <Typography variant="body2" color="text.secondary">
+                      {search ? 'Try adjusting your search terms or browse different categories.' : 'Check back later for updates.'}
                     </Typography>
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <Typography variant="caption" color="text.secondary">
-                        {news.source} &bull; {timeAgo(news.datetime)}
-                      </Typography>
-                        <Box sx={{ display: 'flex', gap: 1 }}>
-                          <IconButton
-                            size="small"
-                            onClick={(e) => handleAddToWishlist(news.newsId, e)}
-                            disabled={addToWishlist.isPending || removeFromWishlist.isPending}
-                            sx={{ color: 'grey.400' }}
-                          >
-                            <StarBorder />
-                          </IconButton>
-                      <Button size="small" variant="text" sx={{ fontWeight: 600 }} onClick={e => { e.stopPropagation(); setSelected(news); }}>
-                        Read More
-                </Button>
-                        </Box>
-            </Box>
-          </CardContent>
-        </Card>
+                  </Box>
                 </Grid>
-            ))
-          )}
-        </Grid>
-        )}
+              ) : (
+                filteredNews.map((news, index) => (
+                  <Grid item xs={12} sm={6} md={4} key={news.newsId}>
+                    <Slide direction="up" in={!isLoading} timeout={300 + index * 100}>
+                      <Card sx={{ 
+                        height: '100%',
+                        minHeight: 420,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        bgcolor: 'background.paper', 
+                        borderRadius: 3, 
+                        boxShadow: 2, 
+                        cursor: 'pointer', 
+                        transition: 'all 0.3s ease',
+                        overflow: 'hidden',
+                        '&:hover': { 
+                          boxShadow: 8,
+                          transform: 'translateY(-4px)'
+                        } 
+                      }} 
+                      onClick={() => setSelected(news)}
+                    >
+                      {/* Image */}
+                      <Box sx={{ 
+                        height: 200, 
+                        background: news.image ? `url(${news.image}) center/cover` : 
+                          `linear-gradient(135deg, ${getCategoryColor(selectedCategory)}20, ${getCategoryColor(selectedCategory)}40)`,
+                        position: 'relative',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}>
+                        {!news.image && (
+                          <Box sx={{ 
+                            display: 'flex', 
+                            flexDirection: 'column', 
+                            alignItems: 'center', 
+                            color: getCategoryColor(selectedCategory) 
+                          }}>
+                            {getCategoryIcon(selectedCategory)}
+                            <Typography variant="caption" sx={{ mt: 1, opacity: 0.7 }}>
+                              No Image Available
+                            </Typography>
+                          </Box>
+                        )}
+                        <Chip 
+                          label={news.category?.replace(/\b\w/g, l => l.toUpperCase()) || 'General'} 
+                          size="small" 
+                          sx={{ 
+                            position: 'absolute', 
+                            top: 12, 
+                            left: 12, 
+                            bgcolor: getCategoryColor(selectedCategory), 
+                            color: 'white', 
+                            fontWeight: 600 
+                          }} 
+                        />
+                      </Box>
 
-        {/* News Detail Modal */}
-        <Dialog 
-          open={!!selected} 
-          onClose={() => setSelected(null)} 
-          maxWidth="md" 
-          fullWidth 
-          PaperProps={{ sx: { borderRadius: 4, bgcolor: 'background.paper', boxShadow: 8 } }}
-        >
-          {selected && (
-            <>
-              <Box sx={{ position: 'relative' }}>
-                <img 
-                  src={selected.image || '/placeholder.svg'} 
-                  alt={selected.headline} 
-                  style={{ 
-                    width: '100%', 
-                    height: 260, 
-                    objectFit: 'cover', 
-                    borderTopLeftRadius: 16, 
-                    borderTopRightRadius: 16 
+                      <CardContent sx={{ p: 3, flex: 1, display: 'flex', flexDirection: 'column' }}>
+                        <Typography variant="h6" sx={{ 
+                          fontWeight: 'bold', 
+                          mb: 2, 
+                          minHeight: 48,
+                          lineHeight: 1.3,
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden'
+                        }}>
+                          {news.headline}
+                        </Typography>
+                        
+                        <Typography variant="body2" color="text.secondary" sx={{ 
+                          mb: 3, 
+                          minHeight: 40,
+                          lineHeight: 1.5,
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden'
+                        }}>
+                          {news.summary && news.summary.length > 100 ? news.summary.slice(0, 100) + '...' : news.summary || 'No summary available'}
+                        </Typography>
+
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 'auto' }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Avatar sx={{ width: 24, height: 24, fontSize: '0.75rem', bgcolor: getCategoryColor(selectedCategory) }}>
+                              {news.source?.charAt(0) || 'N'}
+                            </Avatar>
+                            <Typography variant="caption" color="text.secondary">
+                              {news.source}
+                            </Typography>
+                          </Box>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <AccessTime sx={{ fontSize: 14 }} />
+                            {timeAgo(news.datetime)}
+                          </Typography>
+                        </Box>
+
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 2 }}>
+                          <Box sx={{ display: 'flex', gap: 1 }}>
+                            <Tooltip title="Add to favorites">
+                              <IconButton
+                                size="small"
+                                onClick={(e) => handleAddToWishlist(news.newsId, e)}
+                                disabled={addToWishlist.isPending || removeFromWishlist.isPending}
+                                sx={{ color: isInWishlist(news.newsId) ? 'error.main' : 'grey.400', '&:hover': { color: 'error.main' } }}
+                              >
+                                {isInWishlist(news.newsId) ? <Star /> : <StarBorder />}
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Share">
+                              <IconButton
+                                size="small"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigator.share?.({ title: news.headline, url: news.url });
+                                }}
+                                sx={{ color: 'grey.400' }}
+                              >
+                                <Share />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Summarize with AI">
+                              <IconButton
+                                size="small"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  (window as any).marketNowChatbotSummarize?.({
+                                    headline: news.headline,
+                                    summary: news.summary || ''
+                                  });
+                                }}
+                                sx={{ color: 'grey.400', '&:hover': { color: 'primary.main' } }}
+                              >
+                                <SmartToy />
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
+                          <Button 
+                            size="small" 
+                            variant="outlined" 
+                            sx={{ 
+                              fontWeight: 600,
+                              borderRadius: 2,
+                              textTransform: 'none'
+                            }} 
+                            onClick={e => { 
+                              e.stopPropagation(); 
+                              setSelected(news); 
+                            }}
+                          >
+                            Read More
+                          </Button>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  </Slide>
+                </Grid>
+                ))
+              )}
+            </Grid>
+          </Fade>
+        )}
+      </Container>
+
+      {/* News Detail Modal */}
+      <Dialog 
+        open={!!selected} 
+        onClose={() => setSelected(null)} 
+        maxWidth="md" 
+        fullWidth 
+        PaperProps={{ 
+          sx: { 
+            borderRadius: 4, 
+            bgcolor: 'background.paper', 
+            boxShadow: 24,
+            overflow: 'hidden'
+          } 
+        }}
+      >
+        {selected && (
+          <>
+            <Box sx={{ position: 'relative' }}>
+              <img 
+                src={selected.image || '/placeholder.svg'} 
+                alt={selected.headline} 
+                style={{ 
+                  width: '100%', 
+                  height: 300, 
+                  objectFit: 'cover'
+                }} 
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                }}
+              />
+              <Box sx={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                background: 'linear-gradient(180deg, rgba(0,0,0,0.3) 0%, transparent 50%, rgba(0,0,0,0.7) 100%)'
+              }} />
+              <IconButton 
+                onClick={() => setSelected(null)} 
+                sx={{ 
+                  position: 'absolute', 
+                  top: 16, 
+                  right: 16, 
+                  bgcolor: 'rgba(0,0,0,0.5)', 
+                  color: 'white', 
+                  backdropFilter: 'blur(10px)',
+                  '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' } 
+                }}
+              >
+                <Close />
+              </IconButton>
+              <Box sx={{ position: 'absolute', bottom: 16, left: 16, right: 16 }}>
+                <Chip 
+                  label={selected.category?.replace(/\b\w/g, l => l.toUpperCase()) || 'General'} 
+                  size="small" 
+                  sx={{ 
+                    bgcolor: getCategoryColor(selectedCategory), 
+                    color: 'white', 
+                    fontWeight: 600,
+                    mb: 1
                   }} 
                 />
-                <IconButton 
-                  onClick={() => setSelected(null)} 
-                  sx={{ 
-                    position: 'absolute', 
-                    top: 12, 
-                    right: 12, 
-                    bgcolor: 'background.default', 
-                    color: 'grey.300', 
-                    '&:hover': { bgcolor: 'grey.900', color: 'white' } 
-                  }}
-                >
-                  <Close />
-                </IconButton>
-              </Box>
-              <DialogContent sx={{ p: { xs: 2, sm: 4 } }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                  <Chip 
-                    label={selected.category?.replace(/\b\w/g, l => l.toUpperCase()) || 'General'} 
-                    size="small" 
-                    sx={{ bgcolor: 'grey.900', color: 'grey.100', fontWeight: 600 }} 
-                  />
-                  <Box>
-                    <Tooltip title="Add to favorites">
-                      <IconButton 
-                        onClick={(e) => handleAddToWishlist(selected.newsId, e)}
-                        disabled={addToWishlist.isPending || removeFromWishlist.isPending}
-                        sx={{ color: 'grey.400' }}
-                      >
-                        <StarBorder />
-                      </IconButton>
-                    </Tooltip>
-                  </Box>
-                </Box>
-                <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2 }}>
+                <Typography variant="h4" sx={{ 
+                  fontWeight: 'bold', 
+                  color: 'white',
+                  textShadow: '2px 2px 4px rgba(0,0,0,0.5)',
+                  lineHeight: 1.2
+                }}>
                   {selected.headline}
                 </Typography>
-                <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.6 }}>
-                  {selected.summary || 'No summary available'}
-                </Typography>
-                <Divider sx={{ my: 2 }} />
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Source: {selected.source} &bull; {timeAgo(selected.datetime)}
-                  </Typography>
-                  {selected.url && (
-                <Button
-                  variant="outlined"
-                      startIcon={<OpenInNew />}
-                      onClick={() => window.open(selected.url, '_blank')}
-                      size="small"
-                    >
-                      Read Full Article
-                </Button>
-                  )}
-                </Box>
-                {selected.related && (
-                  <Box sx={{ mt: 2 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      Related: {selected.related}
-                  </Typography>
+              </Box>
             </Box>
+            
+            <DialogContent sx={{ p: { xs: 3, sm: 4 } }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <Avatar sx={{ bgcolor: getCategoryColor(selectedCategory) }}>
+                    {selected.source?.charAt(0) || 'N'}
+                  </Avatar>
+                  <Box>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                      {selected.source}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <AccessTime sx={{ fontSize: 12 }} />
+                      {timeAgo(selected.datetime)}
+                    </Typography>
+                  </Box>
+                </Box>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Tooltip title="Add to favorites">
+                    <IconButton 
+                      onClick={(e) => handleAddToWishlist(selected.newsId, e)}
+                      disabled={addToWishlist.isPending || removeFromWishlist.isPending}
+                      sx={{ color: isInWishlist(selected.newsId) ? 'error.main' : 'grey.400', '&:hover': { color: 'error.main' } }}
+                    >
+                      {isInWishlist(selected.newsId) ? <Star /> : <StarBorder />}
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Share">
+                    <IconButton
+                      onClick={(e) => {
+                        navigator.share?.({ title: selected.headline, url: selected.url });
+                      }}
+                      sx={{ color: 'grey.400' }}
+                    >
+                      <Share />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Summarize with AI">
+                    <IconButton
+                      size="small"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        (window as any).marketNowChatbotSummarize?.({
+                          headline: selected.headline,
+                          summary: selected.summary || ''
+                        });
+                      }}
+                      sx={{ color: 'grey.400', '&:hover': { color: 'primary.main' } }}
+                    >
+                      <SmartToy />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
+              </Box>
+
+              <Typography variant="body1" sx={{ mb: 4, lineHeight: 1.7, fontSize: '1.1rem' }}>
+                {selected.summary || 'No summary available'}
+              </Typography>
+
+              <Divider sx={{ my: 3 }} />
+
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <Source sx={{ fontSize: 16 }} />
+                    Source: {selected.source}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <AccessTime sx={{ fontSize: 16 }} />
+                    {timeAgo(selected.datetime)}
+                  </Typography>
+                </Box>
+                {selected.url && (
+                  <Button
+                    variant="contained"
+                    startIcon={<OpenInNew />}
+                    onClick={() => window.open(selected.url, '_blank')}
+                    sx={{ borderRadius: 2, textTransform: 'none' }}
+                  >
+                    Read Full Article
+                  </Button>
                 )}
-              </DialogContent>
-            </>
-          )}
-        </Dialog>
-      </Container>
+              </Box>
+
+              {selected.related && (
+                <Box sx={{ mt: 3, p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                    Related Topics:
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {selected.related}
+                  </Typography>
+                </Box>
+              )}
+            </DialogContent>
+          </>
+        )}
+      </Dialog>
     </Box>
   );
 };
 
-export default News;
+export default NewsPage;

@@ -1,13 +1,10 @@
 import React, { useState } from 'react';
 import { 
+  Box,
+  Container,
+  Typography,
   Card, 
   CardContent, 
-  Typography, 
-  Button, 
-  Chip, 
-  TextField, 
-  Box, 
-  Container, 
   Grid,
   Table, 
   TableBody, 
@@ -16,395 +13,365 @@ import {
   TableHead, 
   TableRow, 
   Paper,
-  Tabs,
-  Tab,
-  IconButton,
+  Button,
+  TextField,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
+  IconButton,
+  Chip,
+  Tabs,
+  Tab,
+  Alert,
+  CircularProgress,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
-  Alert,
-  Snackbar,
   Switch,
   FormControlLabel,
-  CircularProgress
+  Divider,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemSecondaryAction
 } from '@mui/material';
 import { 
-  People, 
-  TrendingUp, 
-  AttachMoney, 
-  TrendingUp as TrendingUpIcon, 
-  Settings, 
-  Storage, 
-  Security, 
-  Notifications,
-  BarChart,
-  Visibility,
-  PersonAdd,
+  Add,
   Edit,
   Delete,
-  Logout,
-  Save,
-  Cancel,
-  Diamond,
-  Person
+  Person,
+  Security,
+  Settings,
+  TrendingUp,
+  Visibility,
+  VisibilityOff
 } from '@mui/icons-material';
-import Navigation from "@/components/Navigation";
-import { useAdminAuth } from "@/contexts/AdminAuthContext";
-import { useCustomer } from "@/contexts/CustomerContext";
-import CustomerTypeIndicator from "@/components/CustomerTypeIndicator";
+import Navigation from '@/components/Navigation';
+import { useAuth } from '@/contexts/AuthContext';
 import { 
   useAllUsers, 
+  useNormalUsers,
+  useSpecialUsers,
+  useUsersByRole,
+  useAllRoles,
+  useLiborRates,
   useCreateUser, 
   useUpdateUser, 
   useDeleteUser,
+  useCreateRole,
+  useDeleteRole,
+  useAssignRoleToUser,
+  useSetUserRole,
+  useAssignRolesBulk,
+  useUpdateLiborRates,
+  useDeleteLiborRate,
   useLiborSpreadNormal,
   useLiborSpreadSpecial,
   useSetLiborSpreadNormal,
   useSetLiborSpreadSpecial
 } from '@/hooks/useApi';
+import { User, Role, LiborRate } from '@/config/types';
 
-interface User {
-  id: string;
-  username: string;
-  email: string;
-  firstName: string;
-  lastName: string;
-  roles: Array<{ id: string; name: string; description: string }>;
+interface TabPanelProps {
+  children?: React.ReactNode;
+  index: number;
+  value: number;
 }
 
-interface LiborRate {
-  specialCustomer: number;
-  normalCustomer: number;
+function TabPanel(props: TabPanelProps) {
+  const { children, value, index, ...other } = props;
+  return (
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`admin-tabpanel-${index}`}
+      aria-labelledby={`admin-tab-${index}`}
+      {...other}
+    >
+      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
+    </div>
+  );
 }
 
 const Admin = () => {
-  const [activeTab, setActiveTab] = useState(0);
-  const [userDialog, setUserDialog] = useState(false);
+  const { user } = useAuth();
+  const [tabValue, setTabValue] = useState(0);
+  const [selectedRole, setSelectedRole] = useState('ROLE_NORMAL');
+  const [openUserDialog, setOpenUserDialog] = useState(false);
+  const [openRoleDialog, setOpenRoleDialog] = useState(false);
+  const [openLiborDialog, setOpenLiborDialog] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [editingRole, setEditingRole] = useState<Role | null>(null);
+  const [editingLibor, setEditingLibor] = useState<LiborRate | null>(null);
+
+  // Form states
   const [userForm, setUserForm] = useState({
     username: '',
     email: '',
+    password: '',
     firstName: '',
-    lastName: '',
-    password: ''
+    lastName: ''
   });
 
-  const [snackbar, setSnackbar] = useState({
-    open: false,
-    message: '',
-    severity: 'success' as 'success' | 'error'
+  const [roleForm, setRoleForm] = useState({
+    name: '',
+    description: ''
   });
 
-  const { logout } = useAdminAuth();
-  const { customerType, setCustomerType, isSpecialCustomer } = useCustomer();
+  const [liborForm, setLiborForm] = useState({
+    rate: 0,
+    type: '',
+    description: ''
+  });
 
-  // API calls
-  const { data: users, isLoading: usersLoading, error: usersError } = useAllUsers();
-  const { data: normalLibor, isLoading: normalLiborLoading } = useLiborSpreadNormal();
-  const { data: specialLibor, isLoading: specialLiborLoading } = useLiborSpreadSpecial();
+  // API hooks
+  const { data: allUsers, isLoading: usersLoading } = useAllUsers();
+  const { data: normalUsers } = useNormalUsers();
+  const { data: specialUsers } = useSpecialUsers();
+  const { data: usersByRole } = useUsersByRole(selectedRole);
+  const { data: allRoles, isLoading: rolesLoading } = useAllRoles();
+  const { data: liborRates, isLoading: liborLoading } = useLiborRates();
+  const { data: normalSpread } = useLiborSpreadNormal();
+  const { data: specialSpread } = useLiborSpreadSpecial();
 
   // Mutations
   const createUser = useCreateUser();
   const updateUser = useUpdateUser();
   const deleteUser = useDeleteUser();
-  const setNormalLibor = useSetLiborSpreadNormal();
-  const setSpecialLibor = useSetLiborSpreadSpecial();
+  const createRole = useCreateRole();
+  const deleteRole = useDeleteRole();
+  const assignRoleToUser = useAssignRoleToUser();
+  const setUserRole = useSetUserRole();
+  const assignRolesBulk = useAssignRolesBulk();
+  const updateLiborRates = useUpdateLiborRates();
+  const deleteLiborRate = useDeleteLiborRate();
+  const setLiborSpreadNormal = useSetLiborSpreadNormal();
+  const setLiborSpreadSpecial = useSetLiborSpreadSpecial();
 
-  const [liborRates, setLiborRates] = useState<LiborRate>({
-    specialCustomer: specialLibor || 5.25,
-    normalCustomer: normalLibor || 4.75
-  });
+  // Check if user has admin role
+  const isAdmin = user?.roles?.some(role => role.name === 'ROLE_ADMIN');
 
-  // Update libor rates when API data loads
-  React.useEffect(() => {
-    if (normalLibor !== undefined && specialLibor !== undefined) {
-      setLiborRates({
-        specialCustomer: specialLibor,
-        normalCustomer: normalLibor
-      });
-    }
-  }, [normalLibor, specialLibor]);
-
-  const userStats = [
-    { name: "Total Users", value: users?.length?.toString() || "0", change: "+12%", icon: People },
-    { name: "Active Sessions", value: "1,234", change: "+5%", icon: TrendingUp },
-    { name: "Revenue", value: "$45,231", change: "+18%", icon: AttachMoney },
-    { name: "Growth Rate", value: "23.5%", change: "+2.1%", icon: TrendingUpIcon },
-  ];
-
-  const systemLogs = [
-    { id: 1, timestamp: "2024-01-15 14:30", event: "User login", user: "john@example.com", status: "Success" },
-    { id: 2, timestamp: "2024-01-15 14:25", event: "Database backup", user: "System", status: "Success" },
-    { id: 3, timestamp: "2024-01-15 14:20", event: "API call", user: "jane@example.com", status: "Failed" },
-    { id: 4, timestamp: "2024-01-15 14:15", event: "User registration", user: "alice@example.com", status: "Success" },
-  ];
-
-  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
-    setActiveTab(newValue);
-  };
-
-  const handleLiborRateChange = async (type: keyof LiborRate, value: number) => {
-    setLiborRates(prev => ({ ...prev, [type]: value }));
-    
-    try {
-      if (type === 'specialCustomer') {
-        await setSpecialLibor.mutateAsync(value);
-      } else {
-        await setNormalLibor.mutateAsync(value);
-      }
-      
-    setSnackbar({
-      open: true,
-      message: 'LIBOR rates updated successfully!',
-      severity: 'success'
-    });
-    } catch (error) {
-      setSnackbar({
-        open: true,
-        message: 'Failed to update LIBOR rates',
-        severity: 'error'
-      });
-    }
-  };
-
-  const openUserDialog = (user?: User) => {
-    if (user) {
-      setEditingUser(user);
-      setUserForm({
-        username: user.username,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        password: ''
-      });
-    } else {
-      setEditingUser(null);
-      setUserForm({
-        username: '',
-        email: '',
-        firstName: '',
-        lastName: '',
-        password: ''
-      });
-    }
-    setUserDialog(true);
-  };
-
-  const handleSaveUser = async () => {
-    try {
-    if (editingUser) {
-      // Update existing user
-        await updateUser.mutateAsync({
-          id: editingUser.id,
-          userData: {
-            username: userForm.username,
-            email: userForm.email,
-            firstName: userForm.firstName,
-            lastName: userForm.lastName
-          }
-        });
-      setSnackbar({
-        open: true,
-        message: 'User updated successfully!',
-        severity: 'success'
-      });
-    } else {
-      // Add new user
-        await createUser.mutateAsync({
-          username: userForm.username,
-          email: userForm.email,
-          firstName: userForm.firstName,
-          lastName: userForm.lastName,
-          password: userForm.password
-        });
-      setSnackbar({
-        open: true,
-        message: 'User added successfully!',
-        severity: 'success'
-      });
-    }
-    setUserDialog(false);
-    } catch (error) {
-      setSnackbar({
-        open: true,
-        message: 'Failed to save user',
-        severity: 'error'
-      });
-    }
-  };
-
-  const handleDeleteUser = async (userId: string) => {
-    try {
-      await deleteUser.mutateAsync(userId);
-    setSnackbar({
-      open: true,
-      message: 'User deleted successfully!',
-      severity: 'success'
-    });
-    } catch (error) {
-      setSnackbar({
-        open: true,
-        message: 'Failed to delete user',
-        severity: 'error'
-      });
-    }
-  };
-
-  const handleCloseSnackbar = () => {
-    setSnackbar(prev => ({ ...prev, open: false }));
-  };
-
-  if (usersError) {
+  if (!isAdmin) {
     return (
       <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
         <Navigation />
         <Container maxWidth="lg" sx={{ py: 4 }}>
-          <Alert severity="error" sx={{ mb: 2 }}>
-            Failed to load admin data. Please try again later.
+          <Alert severity="error">
+            Access denied. You need ROLE_ADMIN to access this page.
           </Alert>
         </Container>
       </Box>
     );
   }
 
+  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+    setTabValue(newValue);
+  };
+
+  const handleCreateUser = async () => {
+    try {
+      await createUser.mutateAsync(userForm);
+      setOpenUserDialog(false);
+      setUserForm({ username: '', email: '', password: '', firstName: '', lastName: '' });
+    } catch (error) {
+      console.error('Failed to create user:', error);
+    }
+  };
+
+  const handleUpdateUser = async () => {
+    if (!editingUser) return;
+    try {
+      await updateUser.mutateAsync({
+        id: editingUser.id,
+        userData: userForm
+      });
+      setOpenUserDialog(false);
+      setEditingUser(null);
+      setUserForm({ username: '', email: '', password: '', firstName: '', lastName: '' });
+    } catch (error) {
+      console.error('Failed to update user:', error);
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    if (window.confirm('Are you sure you want to delete this user?')) {
+      try {
+        await deleteUser.mutateAsync(userId);
+      } catch (error) {
+        console.error('Failed to delete user:', error);
+      }
+    }
+  };
+
+  const handleCreateRole = async () => {
+    try {
+      await createRole.mutateAsync(roleForm);
+      setOpenRoleDialog(false);
+      setRoleForm({ name: '', description: '' });
+    } catch (error) {
+      console.error('Failed to create role:', error);
+          }
+  };
+
+  const handleDeleteRole = async (roleId: string) => {
+    if (window.confirm('Are you sure you want to delete this role?')) {
+      try {
+        await deleteRole.mutateAsync(roleId);
+      } catch (error) {
+        console.error('Failed to delete role:', error);
+      }
+    }
+  };
+
+  const handleAssignRole = async (userId: string, roleName: string) => {
+    try {
+      await assignRoleToUser.mutateAsync({ userId, roleName });
+    } catch (error) {
+      console.error('Failed to assign role:', error);
+    }
+  };
+
+  const handleSetUserRole = async (userId: string, role: string) => {
+    try {
+      await setUserRole.mutateAsync({ userId, role });
+    } catch (error) {
+      console.error('Failed to set user role:', error);
+    }
+  };
+
+  const handleUpdateLiborRates = async () => {
+    try {
+      await updateLiborRates.mutateAsync(liborForm);
+      setOpenLiborDialog(false);
+      setLiborForm({ rate: 0, type: '', description: '' });
+    } catch (error) {
+      console.error('Failed to update LIBOR rates:', error);
+    }
+  };
+
+  const handleDeleteLiborRate = async (id: string) => {
+    if (window.confirm('Are you sure you want to delete this LIBOR rate?')) {
+      try {
+        await deleteLiborRate.mutateAsync(id);
+      } catch (error) {
+        console.error('Failed to delete LIBOR rate:', error);
+      }
+    }
+  };
+
+  const handleSetLiborSpread = async (type: 'normal' | 'special', value: number) => {
+    try {
+      if (type === 'normal') {
+        await setLiborSpreadNormal.mutateAsync(value);
+      } else {
+        await setLiborSpreadSpecial.mutateAsync(value);
+      }
+    } catch (error) {
+      console.error('Failed to set LIBOR spread:', error);
+    }
+  };
+
+  const openEditUserDialog = (user: User) => {
+    setEditingUser(user);
+    setUserForm({
+      username: user.username,
+      email: user.email,
+      password: '',
+      firstName: user.firstName || '',
+      lastName: user.lastName || ''
+    });
+    setOpenUserDialog(true);
+  };
+
+  const openEditRoleDialog = (role: Role) => {
+    setEditingRole(role);
+    setRoleForm({
+      name: role.name,
+      description: role.description
+    });
+    setOpenRoleDialog(true);
+  };
+
+  const openEditLiborDialog = (libor: LiborRate) => {
+    setEditingLibor(libor);
+    setLiborForm({
+      rate: libor.rate,
+      type: libor.type,
+      description: libor.description || ''
+    });
+    setOpenLiborDialog(true);
+  };
+
         return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
       <Navigation />
-      <Container maxWidth="lg" sx={{ py: 4 }}>
-        {/* Header */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
-          <Box>
-            <Typography variant="h3" component="h1" sx={{ fontWeight: 'bold', mb: 1 }}>
+      
+      <Container maxWidth="xl" sx={{ py: 4 }}>
+        <Typography variant="h3" component="h1" sx={{ fontWeight: 'bold', mb: 3 }}>
               Admin Dashboard
             </Typography>
-            <Typography variant="body1" color="text.secondary">
-              Manage users, settings, and system configuration
-            </Typography>
-          </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <CustomerTypeIndicator />
-            <Button
-              variant="outlined"
-              startIcon={<Logout />}
-              onClick={logout}
-              color="error"
-            >
-              Logout
-            </Button>
-          </Box>
-        </Box>
 
-        {/* Stats Cards */}
-        <Box sx={{ mb: 4 }}>
-          <Grid container spacing={3}>
-            {userStats.map((stat) => (
-          <Grid item xs={12} sm={6} md={3} key={stat.name}>
-                <Card className="card-elevated">
-              <CardContent>
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Box>
-                        <Typography variant="h4" sx={{ fontWeight: 'bold', mb: 1 }}>
-                          {stat.value}
-                        </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                      {stat.name}
-                    </Typography>
-                        <Chip
-                          label={stat.change}
-                          color="success"
-                          size="small"
-                          icon={<TrendingUpIcon />}
-                        />
-                      </Box>
-                      <Box sx={{ 
-                        bgcolor: 'primary.main', 
-                        borderRadius: '50%', 
-                        p: 1,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}>
-                        <stat.icon sx={{ color: 'white', fontSize: 24 }} />
-                  </Box>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-            ))}
-          </Grid>
-        </Box>
-
-        {/* Tabs */}
         <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-          <Tabs value={activeTab} onChange={handleTabChange}>
-            <Tab label="User Management" />
-            <Tab label="LIBOR Rates" />
-            <Tab label="System Logs" />
-            <Tab label="Settings" />
+          <Tabs value={tabValue} onChange={handleTabChange}>
+            <Tab label="User Management" icon={<Person />} />
+            <Tab label="Role Management" icon={<Security />} />
+            <Tab label="LIBOR Management" icon={<TrendingUp />} />
+            <Tab label="System Settings" icon={<Settings />} />
           </Tabs>
         </Box>
 
-        {/* Tab Content */}
-        {activeTab === 0 && (
-          <Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-              <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
-                User Management
-              </Typography>
+        {/* User Management Tab */}
+        <TabPanel value={tabValue} index={0}>
+          <Grid container spacing={3}>
+            <Grid item xs={12}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h5">User Management</Typography>
           <Button 
             variant="contained" 
-            startIcon={<PersonAdd />}
-            onClick={() => openUserDialog()}
+                  startIcon={<Add />}
+                  onClick={() => setOpenUserDialog(true)}
           >
             Add User
           </Button>
         </Box>
-        
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    All Users ({allUsers?.length || 0})
+                  </Typography>
             {usersLoading ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
                 <CircularProgress />
-              </Box>
             ) : (
-        <TableContainer component={Paper}>
-          <Table>
+                    <TableContainer>
+                      <Table size="small">
             <TableHead>
               <TableRow>
                       <TableCell>Username</TableCell>
                       <TableCell>Email</TableCell>
-                <TableCell>Name</TableCell>
                       <TableCell>Roles</TableCell>
                 <TableCell>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-                    {users?.map((user) => (
+                          {allUsers?.map((user) => (
                 <TableRow key={user.id}>
-                        <TableCell sx={{ fontWeight: 'bold' }}>{user.username}</TableCell>
+                              <TableCell>{user.username}</TableCell>
                   <TableCell>{user.email}</TableCell>
-                        <TableCell>{user.firstName} {user.lastName}</TableCell>
                   <TableCell>
-                          {user.roles.map(role => (
-                            <Chip key={role.id} label={role.name} size="small" sx={{ mr: 0.5 }} />
+                                {user.roles?.map((role) => (
+                                  <Chip key={role.name} label={role.name} size="small" sx={{ mr: 0.5 }} />
                           ))}
                   </TableCell>
                   <TableCell>
-                      <IconButton 
-                        size="small" 
-                            onClick={() => openUserDialog(user)}
-                        color="primary"
-                      >
+                                <IconButton size="small" onClick={() => openEditUserDialog(user)}>
                         <Edit />
                       </IconButton>
-                      <IconButton 
-                        size="small" 
-                            onClick={() => handleDeleteUser(user.id)}
-                        color="error"
-                      >
+                                <IconButton size="small" onClick={() => handleDeleteUser(user.id)}>
                         <Delete />
                       </IconButton>
                   </TableCell>
@@ -414,198 +381,443 @@ const Admin = () => {
           </Table>
         </TableContainer>
             )}
-          </Box>
-        )}
+                </CardContent>
+              </Card>
+            </Grid>
 
-        {activeTab === 1 && (
-          <Box>
-            <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 3 }}>
-              LIBOR Rate Management
-            </Typography>
-            <Grid container spacing={3}>
               <Grid item xs={12} md={6}>
                 <Card>
                   <CardContent>
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                      <Diamond sx={{ mr: 1, color: 'primary.main' }} />
-                      <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                        Special Customer Rate
+                  <Typography variant="h6" gutterBottom>
+                    Users by Role
             </Typography>
-          </Box>
-                    <TextField
-                      fullWidth
-                      label="LIBOR Rate (%)"
-                      type="number"
-                      value={liborRates.specialCustomer}
-                      onChange={(e) => handleLiborRateChange('specialCustomer', Number(e.target.value))}
-                      disabled={specialLiborLoading || setSpecialLibor.isPending}
-                      InputProps={{
-                        endAdornment: specialLiborLoading || setSpecialLibor.isPending ? <CircularProgress size={20} /> : null
-                      }}
-                    />
+                  <FormControl fullWidth sx={{ mb: 2 }}>
+                    <InputLabel>Select Role</InputLabel>
+                    <Select
+                      value={selectedRole}
+                      onChange={(e) => setSelectedRole(e.target.value)}
+                    >
+                      <MenuItem value="ROLE_NORMAL">Normal Users</MenuItem>
+                      <MenuItem value="ROLE_SPECIAL">Special Users</MenuItem>
+                      <MenuItem value="ROLE_ADMIN">Admin Users</MenuItem>
+                    </Select>
+                  </FormControl>
+                  
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Username</TableCell>
+                          <TableCell>Email</TableCell>
+                          <TableCell>Actions</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {usersByRole?.map((user) => (
+                          <TableRow key={user.id}>
+                            <TableCell>{user.username}</TableCell>
+                            <TableCell>{user.email}</TableCell>
+                            <TableCell>
+                              <Button
+                                size="small"
+                                onClick={() => handleSetUserRole(user.id, selectedRole === 'ROLE_NORMAL' ? 'ROLE_SPECIAL' : 'ROLE_NORMAL')}
+                              >
+                                Toggle Role
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
                   </CardContent>
                 </Card>
               </Grid>
-              <Grid item xs={12} md={6}>
+          </Grid>
+        </TabPanel>
+
+        {/* Role Management Tab */}
+        <TabPanel value={tabValue} index={1}>
+          <Grid container spacing={3}>
+            <Grid item xs={12}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h5">Role Management</Typography>
+                <Button
+                  variant="contained"
+                  startIcon={<Add />}
+                  onClick={() => setOpenRoleDialog(true)}
+                >
+                  Add Role
+                </Button>
+              </Box>
+            </Grid>
+
+            <Grid item xs={12}>
                 <Card>
                   <CardContent>
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                      <Person sx={{ mr: 1, color: 'primary.main' }} />
-                      <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                        Normal Customer Rate
-                      </Typography>
-            </Box>
-                    <TextField
-                      fullWidth
-                      label="LIBOR Rate (%)"
-                      type="number"
-                      value={liborRates.normalCustomer}
-                      onChange={(e) => handleLiborRateChange('normalCustomer', Number(e.target.value))}
-                      disabled={normalLiborLoading || setNormalLibor.isPending}
-                      InputProps={{
-                        endAdornment: normalLiborLoading || setNormalLibor.isPending ? <CircularProgress size={20} /> : null
-                      }}
-                    />
+                  {rolesLoading ? (
+                    <CircularProgress />
+                  ) : (
+                    <TableContainer>
+                      <Table>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>Role Name</TableCell>
+                            <TableCell>Description</TableCell>
+                            <TableCell>Actions</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {allRoles?.map((role) => (
+                            <TableRow key={role.name}>
+                              <TableCell>{role.name}</TableCell>
+                              <TableCell>{role.description}</TableCell>
+                              <TableCell>
+                                <IconButton size="small" onClick={() => openEditRoleDialog(role)}>
+                                  <Edit />
+                                </IconButton>
+                                <IconButton size="small" onClick={() => handleDeleteRole(role.name)}>
+                                  <Delete />
+                                </IconButton>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  )}
                   </CardContent>
                 </Card>
                 </Grid>
               </Grid>
-            </Box>
-          )}
+        </TabPanel>
 
-        {activeTab === 2 && (
-          <Box>
-            <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 3 }}>
-              System Logs
+        {/* LIBOR Management Tab */}
+        <TabPanel value={tabValue} index={2}>
+          <Grid container spacing={3}>
+            <Grid item xs={12}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h5">LIBOR Rate Management</Typography>
+                <Button
+                  variant="contained"
+                  startIcon={<Add />}
+                  onClick={() => setOpenLiborDialog(true)}
+                >
+                  Add LIBOR Rate
+                </Button>
+            </Box>
+            </Grid>
+
+            <Grid item xs={12} md={8}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    LIBOR Rates
                 </Typography>
-            <TableContainer component={Paper}>
+                  {liborLoading ? (
+                    <CircularProgress />
+                  ) : (
+                    <TableContainer>
               <Table>
                 <TableHead>
                   <TableRow>
-                    <TableCell>Timestamp</TableCell>
-                    <TableCell>Event</TableCell>
-                    <TableCell>User</TableCell>
-                    <TableCell>Status</TableCell>
+                            <TableCell>Type</TableCell>
+                            <TableCell>Rate</TableCell>
+                            <TableCell>Effective Date</TableCell>
+                            <TableCell>Description</TableCell>
+                            <TableCell>Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {systemLogs.map((log) => (
-                    <TableRow key={log.id}>
-                      <TableCell>{log.timestamp}</TableCell>
-                      <TableCell>{log.event}</TableCell>
-                      <TableCell>{log.user}</TableCell>
+                          {liborRates?.map((libor) => (
+                            <TableRow key={libor.id}>
+                              <TableCell>{libor.type}</TableCell>
+                              <TableCell>{libor.rate}%</TableCell>
+                              <TableCell>{libor.effectiveDate}</TableCell>
+                              <TableCell>{libor.description}</TableCell>
                       <TableCell>
-                        <Chip
-                          label={log.status}
-                          color={log.status === 'Success' ? 'success' : 'error'}
-                          size="small"
-                        />
+                                <IconButton size="small" onClick={() => openEditLiborDialog(libor)}>
+                                  <Edit />
+                                </IconButton>
+                                <IconButton size="small" onClick={() => handleDeleteLiborRate(libor.id)}>
+                                  <Delete />
+                                </IconButton>
                       </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </TableContainer>
-          </Box>
-          )}
+                  )}
+                </CardContent>
+              </Card>
+            </Grid>
 
-        {activeTab === 3 && (
+            <Grid item xs={12} md={4}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    LIBOR Spreads
+                  </Typography>
+                  
+                  <Box sx={{ mb: 3 }}>
+                    <Typography variant="subtitle2" gutterBottom>
+                      Normal User Spread
+                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <TextField
+                        type="number"
+                        value={normalSpread || 0}
+                        onChange={(e) => handleSetLiborSpread('normal', parseFloat(e.target.value))}
+                        size="small"
+                        InputProps={{ endAdornment: <Typography variant="caption">%</Typography> }}
+                      />
+                    </Box>
+                  </Box>
+
+                  <Divider sx={{ my: 2 }} />
+
           <Box>
-            <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 3 }}>
+                    <Typography variant="subtitle2" gutterBottom>
+                      Special User Spread
+                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <TextField
+                        type="number"
+                        value={specialSpread || 0}
+                        onChange={(e) => handleSetLiborSpread('special', parseFloat(e.target.value))}
+                        size="small"
+                        InputProps={{ endAdornment: <Typography variant="caption">%</Typography> }}
+                      />
+                    </Box>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+        </TabPanel>
+
+        {/* System Settings Tab */}
+        <TabPanel value={tabValue} index={3}>
+          <Grid container spacing={3}>
+            <Grid item xs={12}>
+              <Typography variant="h5" gutterBottom>
               System Settings
             </Typography>
-            <Grid container spacing={3}>
+            </Grid>
+
               <Grid item xs={12} md={6}>
             <Card>
               <CardContent>
-                    <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-                      Customer Type
+                  <Typography variant="h6" gutterBottom>
+                    User Statistics
                 </Typography>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={isSpecialCustomer}
-                          onChange={(e) => setCustomerType(e.target.checked ? 'Special' : 'Normal')}
-                        />
-                      }
-                      label="Special Customer"
+                  <List>
+                    <ListItem>
+                      <ListItemText 
+                        primary="Total Users" 
+                        secondary={allUsers?.length || 0} 
+                      />
+                    </ListItem>
+                    <ListItem>
+                      <ListItemText 
+                        primary="Normal Users" 
+                        secondary={normalUsers?.length || 0} 
+                      />
+                    </ListItem>
+                    <ListItem>
+                      <ListItemText 
+                        primary="Special Users" 
+                        secondary={specialUsers?.length || 0} 
                     />
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                      Current type: {customerType}
+                    </ListItem>
+                    <ListItem>
+                      <ListItemText 
+                        primary="Total Roles" 
+                        secondary={allRoles?.length || 0} 
+                      />
+                    </ListItem>
+                  </List>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    LIBOR Statistics
                 </Typography>
+                  <List>
+                    <ListItem>
+                      <ListItemText 
+                        primary="Total LIBOR Rates" 
+                        secondary={liborRates?.length || 0} 
+                      />
+                    </ListItem>
+                    <ListItem>
+                      <ListItemText 
+                        primary="Normal Spread" 
+                        secondary={`${normalSpread || 0}%`} 
+                      />
+                    </ListItem>
+                    <ListItem>
+                      <ListItemText 
+                        primary="Special Spread" 
+                        secondary={`${specialSpread || 0}%`} 
+                      />
+                    </ListItem>
+                  </List>
               </CardContent>
             </Card>
               </Grid>
             </Grid>
-          </Box>
-          )}
+        </TabPanel>
+      </Container>
 
       {/* User Dialog */}
-      <Dialog open={userDialog} onClose={() => setUserDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          {editingUser ? 'Edit User' : 'Add New User'}
-        </DialogTitle>
+      <Dialog open={openUserDialog} onClose={() => setOpenUserDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>{editingUser ? 'Edit User' : 'Add User'}</DialogTitle>
         <DialogContent>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12}>
             <TextField
+                fullWidth
                 label="Username"
                 value={userForm.username}
-                onChange={(e) => setUserForm(prev => ({ ...prev, username: e.target.value }))}
-              fullWidth
+                onChange={(e) => setUserForm({ ...userForm, username: e.target.value })}
             />
+            </Grid>
+            <Grid item xs={12}>
             <TextField
+                fullWidth
               label="Email"
               type="email"
               value={userForm.email}
-              onChange={(e) => setUserForm(prev => ({ ...prev, email: e.target.value }))}
-                fullWidth
+                onChange={(e) => setUserForm({ ...userForm, email: e.target.value })}
               />
+            </Grid>
+            <Grid item xs={12}>
               <TextField
+                fullWidth
+                label="Password"
+                type="password"
+                value={userForm.password}
+                onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
+              />
+            </Grid>
+            <Grid item xs={6}>
+              <TextField
+                fullWidth
                 label="First Name"
                 value={userForm.firstName}
-                onChange={(e) => setUserForm(prev => ({ ...prev, firstName: e.target.value }))}
-                fullWidth
+                onChange={(e) => setUserForm({ ...userForm, firstName: e.target.value })}
               />
+            </Grid>
+            <Grid item xs={6}>
               <TextField
+                fullWidth
                 label="Last Name"
                 value={userForm.lastName}
-                onChange={(e) => setUserForm(prev => ({ ...prev, lastName: e.target.value }))}
-                fullWidth
+                onChange={(e) => setUserForm({ ...userForm, lastName: e.target.value })}
               />
-              {!editingUser && (
-                <TextField
-                  label="Password"
-                  type="password"
-                  value={userForm.password}
-                  onChange={(e) => setUserForm(prev => ({ ...prev, password: e.target.value }))}
-                  fullWidth
-                />
-              )}
-          </Box>
+            </Grid>
+          </Grid>
         </DialogContent>
         <DialogActions>
-            <Button onClick={() => setUserDialog(false)}>Cancel</Button>
-            <Button 
-              onClick={handleSaveUser} 
-              variant="contained"
-              disabled={createUser.isPending || updateUser.isPending}
-            >
-              {createUser.isPending || updateUser.isPending ? <CircularProgress size={20} /> : 'Save'}
+          <Button onClick={() => setOpenUserDialog(false)}>Cancel</Button>
+          <Button 
+            onClick={editingUser ? handleUpdateUser : handleCreateUser}
+            variant="contained"
+            disabled={createUser.isPending || updateUser.isPending}
+          >
+            {editingUser ? 'Update' : 'Create'}
           </Button>
         </DialogActions>
       </Dialog>
 
-      {/* Snackbar */}
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={6000}
-          onClose={handleCloseSnackbar}
-      >
-          <Alert onClose={handleCloseSnackbar} severity={snackbar.severity}>
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
-      </Container>
+      {/* Role Dialog */}
+      <Dialog open={openRoleDialog} onClose={() => setOpenRoleDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>{editingRole ? 'Edit Role' : 'Add Role'}</DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Role Name"
+                value={roleForm.name}
+                onChange={(e) => setRoleForm({ ...roleForm, name: e.target.value })}
+              />
+            </Grid>
+            <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                label="Description"
+                multiline
+                rows={3}
+                value={roleForm.description}
+                onChange={(e) => setRoleForm({ ...roleForm, description: e.target.value })}
+                />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenRoleDialog(false)}>Cancel</Button>
+            <Button 
+            onClick={handleCreateRole}
+              variant="contained"
+            disabled={createRole.isPending}
+            >
+            Create
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* LIBOR Dialog */}
+      <Dialog open={openLiborDialog} onClose={() => setOpenLiborDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>{editingLibor ? 'Edit LIBOR Rate' : 'Add LIBOR Rate'}</DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Type"
+                value={liborForm.type}
+                onChange={(e) => setLiborForm({ ...liborForm, type: e.target.value })}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Rate (%)"
+                type="number"
+                value={liborForm.rate}
+                onChange={(e) => setLiborForm({ ...liborForm, rate: parseFloat(e.target.value) })}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Description"
+                multiline
+                rows={3}
+                value={liborForm.description}
+                onChange={(e) => setLiborForm({ ...liborForm, description: e.target.value })}
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenLiborDialog(false)}>Cancel</Button>
+          <Button 
+            onClick={handleUpdateLiborRates}
+            variant="contained"
+            disabled={updateLiborRates.isPending}
+          >
+            {editingLibor ? 'Update' : 'Create'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

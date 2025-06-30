@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Card, 
   CardContent, 
@@ -21,7 +21,9 @@ import {
   IconButton,
   InputAdornment,
   CircularProgress,
-  Alert
+  Alert,
+  Avatar,
+  Link
 } from '@mui/material';
 import { 
   TrendingUp, 
@@ -33,7 +35,9 @@ import {
   Notifications, 
   Article, 
   AttachMoney, 
-  BarChart 
+  BarChart,
+  OpenInNew,
+  AccessTime
 } from '@mui/icons-material';
 import Navigation from "@/components/Navigation";
 import { 
@@ -42,33 +46,64 @@ import {
   useCurrencyWishlist,
   useRemoveFromStockWishlist,
   useRemoveFromNewsWishlist,
-  useRemoveFromCurrencyWishlist
+  useRemoveFromCurrencyWishlist,
+  useTopHeadlines,
+  useNewsByCategory
 } from '@/hooks/useApi';
 import { useAuth } from '@/contexts/AuthContext';
+import type { News } from '@/config/types';
 
 const Wishlist = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [tabValue, setTabValue] = useState(0);
+  const [newsData, setNewsData] = useState<News[]>([]);
   const { user } = useAuth();
 
   // API calls
   const { data: stockWishlist, isLoading: stockLoading, error: stockError } = useStockWishlist(user?.username || '');
   const { data: newsWishlist, isLoading: newsLoading, error: newsError } = useNewsWishlist(user?.username || '');
   const { data: currencyWishlist, isLoading: currencyLoading, error: currencyError } = useCurrencyWishlist(user?.username || '');
+  
+  // Fetch all news data to match with wishlist
+  const { data: headlines } = useTopHeadlines();
+  const { data: generalNews } = useNewsByCategory('general');
+  const { data: mergerNews } = useNewsByCategory('merger');
+  const { data: currencyNews } = useNewsByCategory('currency');
+  const { data: forexNews } = useNewsByCategory('forex');
 
   // Mutations
   const removeFromStockWishlist = useRemoveFromStockWishlist();
   const removeFromNewsWishlist = useRemoveFromNewsWishlist();
   const removeFromCurrencyWishlist = useRemoveFromCurrencyWishlist();
 
+  // Combine all news data and find wishlist items
+  useEffect(() => {
+    const allNews = [
+      ...(headlines || []),
+      ...(generalNews || []),
+      ...(mergerNews || []),
+      ...(currencyNews || []),
+      ...(forexNews || [])
+    ];
+
+    if (newsWishlist?.favoriteNews && allNews.length > 0) {
+      const wishlistNews = allNews.filter(news => 
+        newsWishlist.favoriteNews.includes(news.newsId)
+      );
+      setNewsData(wishlistNews);
+    }
+  }, [newsWishlist, headlines, generalNews, mergerNews, currencyNews, forexNews]);
+
   // Filter wishlist items by search term
   const filteredStocks = stockWishlist?.favoriteStocks?.filter(stock => 
     stock.toLowerCase().includes(searchTerm.toLowerCase())
   ) || [];
 
-  const filteredNews = newsWishlist?.favoriteNews?.filter(news => 
-    news.toLowerCase().includes(searchTerm.toLowerCase())
-  ) || [];
+  const filteredNews = newsData.filter(news => 
+    news.headline?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    news.summary?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    news.source?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   const filteredCurrency = currencyWishlist?.favoriteCurrencies?.filter(currency => 
     currency.toLowerCase().includes(searchTerm.toLowerCase())
@@ -106,6 +141,17 @@ const Wishlist = () => {
     } catch (error) {
       console.error('Failed to remove from currency wishlist:', error);
     }
+  };
+
+  const timeAgo = (unix: number) => {
+    const now = Date.now() / 1000;
+    const diff = Math.floor((now - unix) / 60);
+    if (diff < 1) return 'just now';
+    if (diff < 60) return `${diff} minutes ago`;
+    const hours = Math.floor(diff / 60);
+    if (hours < 24) return `${hours} hours ago`;
+    const days = Math.floor(hours / 24);
+    return `${days} days ago`;
   };
 
   const renderStockTable = () => (
@@ -175,24 +221,63 @@ const Wishlist = () => {
         </TableHead>
         <TableBody>
           {filteredNews.map((news) => (
-            <TableRow key={news}>
+            <TableRow key={news.newsId}>
               <TableCell sx={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {news}
+                <Box>
+                  <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+                    {news.headline}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ 
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden'
+                  }}>
+                    {news.summary}
+                  </Typography>
+                </Box>
               </TableCell>
-              <TableCell>Unknown</TableCell>
               <TableCell>
-                <Chip label="General" size="small" variant="outlined" />
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Avatar sx={{ width: 24, height: 24, fontSize: '0.75rem' }}>
+                    {news.source?.charAt(0) || 'N'}
+                  </Avatar>
+                  <Link href={news.url} target="_blank" rel="noopener" sx={{ textDecoration: 'none' }}>
+                    {news.source}
+                  </Link>
+                </Box>
               </TableCell>
-              <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>Today</TableCell>
               <TableCell>
-                <IconButton 
-                  size="small"
-                  onClick={() => handleRemoveFromNewsWishlist(news)}
-                  color="error"
-                  disabled={removeFromNewsWishlist.isPending}
-                >
-                  <Delete />
-                </IconButton>
+                <Chip 
+                  label={news.category?.replace(/\b\w/g, l => l.toUpperCase()) || 'General'} 
+                  size="small" 
+                  variant="outlined" 
+                />
+              </TableCell>
+              <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <AccessTime sx={{ fontSize: 14 }} />
+                  {timeAgo(news.datetime)}
+                </Box>
+              </TableCell>
+              <TableCell>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <IconButton 
+                    size="small"
+                    onClick={() => window.open(news.url, '_blank')}
+                    sx={{ color: 'primary.main' }}
+                  >
+                    <OpenInNew />
+                  </IconButton>
+                  <IconButton 
+                    size="small"
+                    onClick={() => handleRemoveFromNewsWishlist(news.newsId)}
+                    color="error"
+                    disabled={removeFromNewsWishlist.isPending}
+                  >
+                    <Delete />
+                  </IconButton>
+                </Box>
               </TableCell>
             </TableRow>
           ))}

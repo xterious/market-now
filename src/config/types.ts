@@ -19,7 +19,6 @@ export interface UserDTO {
 }
 
 export interface Role {
-  id: string;
   name: string;
   description: string;
 }
@@ -102,6 +101,19 @@ export interface NewsWishlist {
 export interface CurrencyWishlist {
   username: string;
   favoriteCurrencies: string[];
+}
+
+export interface RoleAssignmentRequest {
+  userId: string;
+  roleNames: string[];
+}
+
+export interface LiborRate {
+  id: string;
+  rate: number;
+  type: string;
+  effectiveDate: string;
+  description?: string;
 }
 
 // API Response types
