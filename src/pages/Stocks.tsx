@@ -73,16 +73,21 @@ const Stocks = () => {
 
   const stocksPerPage = 20;
 
-  // Filter stocks by search term - handle single stock object or array
   const filteredStocks = stockSymbolsData
     ? (Array.isArray(stockSymbolsData)
         ? stockSymbolsData
         : [stockSymbolsData]
-      ).filter(
-        (stock) =>
+      ).filter((stock) => {
+        if (!stock || !stock.symbol) return false;
+
+        return (
           stock.symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          stock.description?.toLowerCase().includes(searchTerm.toLowerCase())
-      )
+          (stock.description
+            ?.toLowerCase()
+            .includes(searchTerm.toLowerCase()) ??
+            false)
+        );
+      })
     : [];
 
   const totalPages = 1; // Since we're getting single objects, pagination is simplified

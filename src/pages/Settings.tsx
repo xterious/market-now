@@ -118,50 +118,11 @@ const Settings = () => {
                 Customize your MarketNow experience
               </Typography>
             </Box>
-            <CustomerTypeIndicator size="medium" showLabel={true} />
+            {/* <CustomerTypeIndicator size="medium" showLabel={true} /> */}
           </Box>
         </Box>
 
         <Grid container spacing={3}>
-          {/* Appearance Settings */}
-          <Grid item xs={12} md={6}>
-            <Card className="card-elevated">
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-                  {theme === 'dark' ? <DarkMode sx={{ mr: 1, color: 'primary.main' }} /> : <LightMode sx={{ mr: 1, color: 'primary.main' }} />}
-                  <Typography variant="h6" component="h2" sx={{ fontWeight: 'bold' }}>
-                    Appearance
-                  </Typography>
-                </Box>
-                
-                <List>
-                  <ListItem>
-                    <ListItemIcon>
-                      {theme === 'dark' ? <DarkMode /> : <LightMode />}
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary="Dark Mode" 
-                      secondary="Switch between light and dark themes"
-                    />
-                    <ListItemSecondaryAction>
-                      <Switch
-                        edge="end"
-                        checked={theme === 'dark'}
-                        onChange={toggleTheme}
-                        color="primary"
-                      />
-                    </ListItemSecondaryAction>
-                  </ListItem>
-                </List>
-
-                <Box sx={{ mt: 2, p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Current theme: <Chip label={theme === 'dark' ? 'Dark' : 'Light'} size="small" color="primary" />
-                  </Typography>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
 
           {/* Customer Type Info */}
           <Grid item xs={12} md={6}>
@@ -193,99 +154,8 @@ const Settings = () => {
             </Card>
           </Grid>
 
-          {/* Notification Settings */}
-          <Grid item xs={12} md={6}>
-            <Card className="card-elevated">
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-                  <Notifications sx={{ mr: 1, color: 'primary.main' }} />
-                  <Typography variant="h6" component="h2" sx={{ fontWeight: 'bold' }}>
-                    Notifications
-                  </Typography>
-                </Box>
-                
-                <List>
-                  <ListItem>
-                    <ListItemText 
-                      primary="Email Notifications" 
-                      secondary="Receive updates via email"
-                    />
-                    <ListItemSecondaryAction>
-                      <Switch
-                        edge="end"
-                        checked={notifications.email}
-                        onChange={handleNotificationChange('email')}
-                        color="primary"
-                      />
-                    </ListItemSecondaryAction>
-                  </ListItem>
-                  <Divider />
-                  <ListItem>
-                    <ListItemText 
-                      primary="Push Notifications" 
-                      secondary="Receive browser notifications"
-                    />
-                    <ListItemSecondaryAction>
-                      <Switch
-                        edge="end"
-                        checked={notifications.push}
-                        onChange={handleNotificationChange('push')}
-                        color="primary"
-                      />
-                    </ListItemSecondaryAction>
-                  </ListItem>
-                  <Divider />
-                  <ListItem>
-                    <ListItemText 
-                      primary="SMS Notifications" 
-                      secondary="Receive text message alerts"
-                    />
-                    <ListItemSecondaryAction>
-                      <Switch
-                        edge="end"
-                        checked={notifications.sms}
-                        onChange={handleNotificationChange('sms')}
-                        color="primary"
-                      />
-                    </ListItemSecondaryAction>
-                  </ListItem>
-                  <Divider />
-                  <ListItem>
-                    <ListItemText 
-                      primary="Market Alerts" 
-                      secondary="Get notified about significant market movements"
-                    />
-                    <ListItemSecondaryAction>
-                      <Switch
-                        edge="end"
-                        checked={notifications.marketAlerts}
-                        onChange={handleNotificationChange('marketAlerts')}
-                        color="primary"
-                      />
-                    </ListItemSecondaryAction>
-                  </ListItem>
-                  <Divider />
-                  <ListItem>
-                    <ListItemText 
-                      primary="News Updates" 
-                      secondary="Receive latest financial news"
-                    />
-                    <ListItemSecondaryAction>
-                      <Switch
-                        edge="end"
-                        checked={notifications.newsUpdates}
-                        onChange={handleNotificationChange('newsUpdates')}
-                        color="primary"
-                      />
-                    </ListItemSecondaryAction>
-                  </ListItem>
-                </List>
-              </CardContent>
-            </Card>
-          </Grid>
-
           {/* Privacy Settings */}
-          <Grid item xs={12} md={6}>
+          {/* <Grid item xs={12} md={6}>
             <Card className="card-elevated">
               <CardContent>
                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
@@ -343,7 +213,7 @@ const Settings = () => {
                 </List>
               </CardContent>
             </Card>
-          </Grid>
+          </Grid> */}
 
           {/* Action Buttons */}
           <Grid item xs={12}>

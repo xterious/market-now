@@ -1,11 +1,25 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { stocksAPI, newsAPI, currencyAPI, wishlistAPI, userAPI, adminAPI, aiAPI } from '@/config/apiService';
-import { useAuth } from '@/contexts/AuthContext';
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  stocksAPI,
+  newsAPI,
+  currencyAPI,
+  wishlistAPI,
+  userAPI,
+  adminAPI,
+  aiAPI,
+} from "@/config/apiService";
+import { useAuth } from "@/contexts/AuthContext";
+import { CurrencyExchangeRate, CurrencySymbolsResponse } from "@/config/types";
 
 // Stock API hooks
-export const useStockSymbols = (exchange: string, page: number,query: string, size: number) => {
+export const useStockSymbols = (
+  exchange: string,
+  page: number,
+  query: string,
+  size: number
+) => {
   return useQuery({
-    queryKey: ['stocks', 'symbols', exchange, page, query, size],
+    queryKey: ["stocks", "symbols", exchange, page, query, size],
     queryFn: () => stocksAPI.getStockSymbols(exchange, page, query, size),
     enabled: !!exchange,
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -15,7 +29,7 @@ export const useStockSymbols = (exchange: string, page: number,query: string, si
 // News API hooks
 export const useTopHeadlines = () => {
   return useQuery({
-    queryKey: ['news', 'headlines'],
+    queryKey: ["news", "headlines"],
     queryFn: () => newsAPI.getTopHeadlines(),
     staleTime: 10 * 60 * 1000, // 10 minutes
   });
@@ -23,7 +37,7 @@ export const useTopHeadlines = () => {
 
 export const useNewsByCategory = (category: string) => {
   return useQuery({
-    queryKey: ['news', 'category', category],
+    queryKey: ["news", "category", category],
     queryFn: () => newsAPI.getNewsByCategory(category),
     enabled: !!category,
     staleTime: 10 * 60 * 1000, // 10 minutes
@@ -32,89 +46,44 @@ export const useNewsByCategory = (category: string) => {
 
 export const useNewsCategories = () => {
   return useQuery({
-    queryKey: ['news', 'categories'],
+    queryKey: ["news", "categories"],
     queryFn: () => newsAPI.getAllCategories(),
     staleTime: 60 * 60 * 1000, // 1 hour
   });
 };
 
 // Currency API hooks
+// Fetch currency symbols
 export const useCurrencySymbols = () => {
-  return useQuery({
-    queryKey: ['currency', 'symbols'],
+  return useQuery<CurrencySymbolsResponse, Error>({
+    queryKey: ["currency", "symbols"],
     queryFn: () => currencyAPI.getCurrencySymbols(),
-    staleTime: 30 * 60 * 1000, // 30 minutes - symbols don't change often
-    retry: 3, // Retry 3 times on failure
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Exponential backoff
+    staleTime: Infinity, // Persist until logout
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 };
 
-export const useRoleBasedExchangeRate = (base: string, target: string) => {
-  return useQuery({
-    queryKey: ['currency', 'role-based-exchange', base, target],
-    queryFn: () => currencyAPI.getRoleBasedExchangeRate(base, target),
-    enabled: !!base && !!target,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    retry: 2, // Retry 2 times on failure
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000), // Exponential backoff
-  });
-};
-
-export const useRoleBasedCurrencyConversion = (base: string, target: string, amount: number) => {
-  return useQuery({
-    queryKey: ['currency', 'role-based-convert', base, target, amount],
-    queryFn: () => currencyAPI.convertCurrencyRoleBased(base, target, amount),
-    enabled: !!base && !!target && amount > 0,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    retry: 2, // Retry 2 times on failure
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000), // Exponential backoff
-  });
-};
-
-export const useLiborRates = () => {
-  return useQuery({
-    queryKey: ['currency', 'libor-rates'],
-    queryFn: () => currencyAPI.getLiborRates(),
-    staleTime: 10 * 60 * 1000, // 10 minutes
-    retry: 3, // Retry 3 times on failure
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Exponential backoff
-  });
-};
-
-export const useCompleteRatesInfo = (base: string, target: string) => {
-  return useQuery({
-    queryKey: ['currency', 'complete-rates-info', base, target],
-    queryFn: () => currencyAPI.getCompleteRatesInfo(base, target),
-    enabled: !!base && !!target,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    retry: 2, // Retry 2 times on failure
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000), // Exponential backoff
-  });
-};
-
-// Legacy hooks for backward compatibility
-export const useExchangeRate = (base: string, target: string, customerType: string = 'normal') => {
-  return useQuery({
-    queryKey: ['currency', 'exchange', base, target, customerType],
+// Fetch exchange rate for a currency pair
+export const useExchangeRate = (
+  base: string,
+  target: string,
+  customerType: string = "normal"
+) => {
+  return useQuery<CurrencyExchangeRate, Error>({
+    queryKey: ["currency", "exchange", base, target, customerType],
     queryFn: () => currencyAPI.getExchangeRate(base, target, customerType),
     enabled: !!base && !!target,
     staleTime: 5 * 60 * 1000, // 5 minutes
-  });
-};
-
-export const useCurrencyConversion = (base: string, target: string, amount: number, customerType: string = 'normal') => {
-  return useQuery({
-    queryKey: ['currency', 'convert', base, target, amount, customerType],
-    queryFn: () => currencyAPI.convertCurrency(base, target, amount, customerType),
-    enabled: !!base && !!target && amount > 0,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: 2,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
   });
 };
 
 // Wishlist API hooks
 export const useStockWishlist = (username: string) => {
   return useQuery({
-    queryKey: ['wishlist', 'stock', username],
+    queryKey: ["wishlist", "stock", username],
     queryFn: () => wishlistAPI.getStockWishlist(username),
     enabled: !!username,
     staleTime: 30 * 1000, // 30 seconds
@@ -123,7 +92,7 @@ export const useStockWishlist = (username: string) => {
 
 export const useNewsWishlist = (username: string) => {
   return useQuery({
-    queryKey: ['wishlist', 'news', username],
+    queryKey: ["wishlist", "news", username],
     queryFn: () => wishlistAPI.getNewsWishlist(username),
     enabled: !!username,
     staleTime: 30 * 1000, // 30 seconds
@@ -132,7 +101,7 @@ export const useNewsWishlist = (username: string) => {
 
 export const useCurrencyWishlist = (username: string) => {
   return useQuery({
-    queryKey: ['wishlist', 'currency', username],
+    queryKey: ["wishlist", "currency", username],
     queryFn: () => wishlistAPI.getCurrencyWishlist(username),
     enabled: !!username,
     staleTime: 30 * 1000, // 30 seconds
@@ -146,9 +115,11 @@ export const useAddToStockWishlist = () => {
 
   return useMutation({
     mutationFn: ({ stockSymbol }: { stockSymbol: string }) =>
-      wishlistAPI.addToStockWishlist(user?.username || '', stockSymbol),
+      wishlistAPI.addToStockWishlist(user?.username || "", stockSymbol),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['wishlist', 'stock', user?.username] });
+      queryClient.invalidateQueries({
+        queryKey: ["wishlist", "stock", user?.username],
+      });
     },
   });
 };
@@ -159,9 +130,11 @@ export const useRemoveFromStockWishlist = () => {
 
   return useMutation({
     mutationFn: ({ stockSymbol }: { stockSymbol: string }) =>
-      wishlistAPI.removeFromStockWishlist(user?.username || '', stockSymbol),
+      wishlistAPI.removeFromStockWishlist(user?.username || "", stockSymbol),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['wishlist', 'stock', user?.username] });
+      queryClient.invalidateQueries({
+        queryKey: ["wishlist", "stock", user?.username],
+      });
     },
   });
 };
@@ -172,9 +145,11 @@ export const useAddToNewsWishlist = () => {
 
   return useMutation({
     mutationFn: ({ newsItem }: { newsItem: string }) =>
-      wishlistAPI.addToNewsWishlist(user?.username || '', newsItem),
+      wishlistAPI.addToNewsWishlist(user?.username || "", newsItem),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['wishlist', 'news', user?.username] });
+      queryClient.invalidateQueries({
+        queryKey: ["wishlist", "news", user?.username],
+      });
     },
   });
 };
@@ -185,9 +160,11 @@ export const useRemoveFromNewsWishlist = () => {
 
   return useMutation({
     mutationFn: ({ newsItem }: { newsItem: string }) =>
-      wishlistAPI.removeFromNewsWishlist(user?.username || '', newsItem),
+      wishlistAPI.removeFromNewsWishlist(user?.username || "", newsItem),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['wishlist', 'news', user?.username] });
+      queryClient.invalidateQueries({
+        queryKey: ["wishlist", "news", user?.username],
+      });
     },
   });
 };
@@ -198,9 +175,11 @@ export const useAddToCurrencyWishlist = () => {
 
   return useMutation({
     mutationFn: ({ currencyCode }: { currencyCode: string }) =>
-      wishlistAPI.addToCurrencyWishlist(user?.username || '', currencyCode),
+      wishlistAPI.addToCurrencyWishlist(user?.username || "", currencyCode),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['wishlist', 'currency', user?.username] });
+      queryClient.invalidateQueries({
+        queryKey: ["wishlist", "currency", user?.username],
+      });
     },
   });
 };
@@ -211,9 +190,14 @@ export const useRemoveFromCurrencyWishlist = () => {
 
   return useMutation({
     mutationFn: ({ currencyCode }: { currencyCode: string }) =>
-      wishlistAPI.removeFromCurrencyWishlist(user?.username || '', currencyCode),
+      wishlistAPI.removeFromCurrencyWishlist(
+        user?.username || "",
+        currencyCode
+      ),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['wishlist', 'currency', user?.username] });
+      queryClient.invalidateQueries({
+        queryKey: ["wishlist", "currency", user?.username],
+      });
     },
   });
 };
@@ -221,7 +205,7 @@ export const useRemoveFromCurrencyWishlist = () => {
 // User API hooks
 export const useCurrentUser = () => {
   return useQuery({
-    queryKey: ['user', 'current'],
+    queryKey: ["user", "current"],
     queryFn: () => userAPI.getCurrentUser(),
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
@@ -230,7 +214,7 @@ export const useCurrentUser = () => {
 // Admin API hooks
 export const useAllUsers = () => {
   return useQuery({
-    queryKey: ['users', 'all'],
+    queryKey: ["users", "all"],
     queryFn: () => adminAPI.getAllUsers(),
     staleTime: 2 * 60 * 1000, // 2 minutes
   });
@@ -238,7 +222,7 @@ export const useAllUsers = () => {
 
 export const useNormalUsers = () => {
   return useQuery({
-    queryKey: ['users', 'normal'],
+    queryKey: ["users", "normal"],
     queryFn: () => adminAPI.getNormalUsers(),
     staleTime: 2 * 60 * 1000, // 2 minutes
   });
@@ -246,7 +230,7 @@ export const useNormalUsers = () => {
 
 export const useSpecialUsers = () => {
   return useQuery({
-    queryKey: ['users', 'special'],
+    queryKey: ["users", "special"],
     queryFn: () => adminAPI.getSpecialUsers(),
     staleTime: 2 * 60 * 1000, // 2 minutes
   });
@@ -254,7 +238,7 @@ export const useSpecialUsers = () => {
 
 export const useUsersByRole = (roleName: string) => {
   return useQuery({
-    queryKey: ['users', 'role', roleName],
+    queryKey: ["users", "role", roleName],
     queryFn: () => adminAPI.getUsersByRole(roleName),
     enabled: !!roleName,
     staleTime: 2 * 60 * 1000, // 2 minutes
@@ -263,7 +247,7 @@ export const useUsersByRole = (roleName: string) => {
 
 export const useAllRoles = () => {
   return useQuery({
-    queryKey: ['roles', 'all'],
+    queryKey: ["roles", "all"],
     queryFn: () => adminAPI.getAllRoles(),
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
@@ -281,9 +265,9 @@ export const useCreateUser = () => {
       lastName: string;
     }) => adminAPI.createUser(userData),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users', 'all'] });
-      queryClient.invalidateQueries({ queryKey: ['users', 'normal'] });
-      queryClient.invalidateQueries({ queryKey: ['users', 'special'] });
+      queryClient.invalidateQueries({ queryKey: ["users", "all"] });
+      queryClient.invalidateQueries({ queryKey: ["users", "normal"] });
+      queryClient.invalidateQueries({ queryKey: ["users", "special"] });
     },
   });
 };
@@ -292,9 +276,10 @@ export const useCreateRole = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (role: { name: string; description: string }) => adminAPI.createRole(role),
+    mutationFn: (role: { name: string; description: string }) =>
+      adminAPI.createRole(role),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['roles', 'all'] });
+      queryClient.invalidateQueries({ queryKey: ["roles", "all"] });
     },
   });
 };
@@ -305,7 +290,7 @@ export const useDeleteRole = () => {
   return useMutation({
     mutationFn: (roleId: string) => adminAPI.deleteRole(roleId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['roles', 'all'] });
+      queryClient.invalidateQueries({ queryKey: ["roles", "all"] });
     },
   });
 };
@@ -317,9 +302,9 @@ export const useAssignRoleToUser = () => {
     mutationFn: ({ userId, roleName }: { userId: string; roleName: string }) =>
       adminAPI.assignRoleToUser(userId, roleName),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users', 'all'] });
-      queryClient.invalidateQueries({ queryKey: ['users', 'normal'] });
-      queryClient.invalidateQueries({ queryKey: ['users', 'special'] });
+      queryClient.invalidateQueries({ queryKey: ["users", "all"] });
+      queryClient.invalidateQueries({ queryKey: ["users", "normal"] });
+      queryClient.invalidateQueries({ queryKey: ["users", "special"] });
     },
   });
 };
@@ -331,9 +316,9 @@ export const useSetUserRole = () => {
     mutationFn: ({ userId, role }: { userId: string; role: string }) =>
       adminAPI.setUserRole(userId, role),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users', 'all'] });
-      queryClient.invalidateQueries({ queryKey: ['users', 'normal'] });
-      queryClient.invalidateQueries({ queryKey: ['users', 'special'] });
+      queryClient.invalidateQueries({ queryKey: ["users", "all"] });
+      queryClient.invalidateQueries({ queryKey: ["users", "normal"] });
+      queryClient.invalidateQueries({ queryKey: ["users", "special"] });
     },
   });
 };
@@ -345,9 +330,9 @@ export const useAssignRolesBulk = () => {
     mutationFn: (roleAssignment: { userId: string; roleNames: string[] }) =>
       adminAPI.assignRolesBulk(roleAssignment),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users', 'all'] });
-      queryClient.invalidateQueries({ queryKey: ['users', 'normal'] });
-      queryClient.invalidateQueries({ queryKey: ['users', 'special'] });
+      queryClient.invalidateQueries({ queryKey: ["users", "all"] });
+      queryClient.invalidateQueries({ queryKey: ["users", "normal"] });
+      queryClient.invalidateQueries({ queryKey: ["users", "special"] });
     },
   });
 };
@@ -358,7 +343,7 @@ export const useUpdateLiborRates = () => {
   return useMutation({
     mutationFn: (liborData: any) => adminAPI.updateLiborRates(liborData),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['libor', 'rates'] });
+      queryClient.invalidateQueries({ queryKey: ["libor", "rates"] });
     },
   });
 };
@@ -369,7 +354,7 @@ export const useDeleteLiborRate = () => {
   return useMutation({
     mutationFn: (id: string) => adminAPI.deleteLiborRate(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['libor', 'rates'] });
+      queryClient.invalidateQueries({ queryKey: ["libor", "rates"] });
     },
   });
 };
@@ -381,10 +366,10 @@ export const useUpdateUser = () => {
     mutationFn: ({ id, userData }: { id: string; userData: any }) =>
       adminAPI.updateUser(id, userData),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users', 'all'] });
-      queryClient.invalidateQueries({ queryKey: ['users', 'normal'] });
-      queryClient.invalidateQueries({ queryKey: ['users', 'special'] });
-      queryClient.invalidateQueries({ queryKey: ['user', 'current'] });
+      queryClient.invalidateQueries({ queryKey: ["users", "all"] });
+      queryClient.invalidateQueries({ queryKey: ["users", "normal"] });
+      queryClient.invalidateQueries({ queryKey: ["users", "special"] });
+      queryClient.invalidateQueries({ queryKey: ["user", "current"] });
     },
   });
 };
@@ -395,9 +380,9 @@ export const useDeleteUser = () => {
   return useMutation({
     mutationFn: (id: string) => adminAPI.deleteUser(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users', 'all'] });
-      queryClient.invalidateQueries({ queryKey: ['users', 'normal'] });
-      queryClient.invalidateQueries({ queryKey: ['users', 'special'] });
+      queryClient.invalidateQueries({ queryKey: ["users", "all"] });
+      queryClient.invalidateQueries({ queryKey: ["users", "normal"] });
+      queryClient.invalidateQueries({ queryKey: ["users", "special"] });
     },
   });
 };
@@ -405,7 +390,7 @@ export const useDeleteUser = () => {
 // LIBOR spread hooks
 export const useLiborSpreadNormal = () => {
   return useQuery({
-    queryKey: ['libor', 'normal'],
+    queryKey: ["libor", "normal"],
     queryFn: () => adminAPI.getLiborSpreadNormal(),
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
@@ -413,7 +398,7 @@ export const useLiborSpreadNormal = () => {
 
 export const useLiborSpreadSpecial = () => {
   return useQuery({
-    queryKey: ['libor', 'special'],
+    queryKey: ["libor", "special"],
     queryFn: () => adminAPI.getLiborSpreadSpecial(),
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
@@ -425,7 +410,7 @@ export const useSetLiborSpreadNormal = () => {
   return useMutation({
     mutationFn: (spread: number) => adminAPI.setLiborSpreadNormal(spread),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['libor', 'normal'] });
+      queryClient.invalidateQueries({ queryKey: ["libor", "normal"] });
     },
   });
 };
@@ -436,7 +421,7 @@ export const useSetLiborSpreadSpecial = () => {
   return useMutation({
     mutationFn: (spread: number) => adminAPI.setLiborSpreadSpecial(spread),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['libor', 'special'] });
+      queryClient.invalidateQueries({ queryKey: ["libor", "special"] });
     },
   });
 };
@@ -452,4 +437,4 @@ export const useAskQuestion = () => {
   return useMutation({
     mutationFn: (question: string) => aiAPI.askQuestion(question),
   });
-}; 
+};

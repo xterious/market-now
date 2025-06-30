@@ -5,9 +5,6 @@ interface CurrencyContextType {
   symbols: CurrencySymbolsResponse;
   selectedToCurrency: string;
   setSelectedToCurrency: (currency: string) => void;
-  isLoading: boolean;
-  error: string | null;
-  refreshSymbols: () => void;
 }
 
 const CurrencyContext = createContext<CurrencyContextType | undefined>(undefined);
@@ -22,7 +19,7 @@ export const useCurrency = () => {
 
 export const CurrencyProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [selectedToCurrency, setSelectedToCurrency] = useState<string>('USD');
-  const [localSymbols, setLocalSymbols] = useState<CurrencySymbolsResponse>({});
+  const [symbols, setSymbols] = useState<CurrencySymbolsResponse>({});
 
   // Load selected currency from localStorage on mount
   useEffect(() => {
@@ -40,16 +37,15 @@ export const CurrencyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // Clear data on logout
   const clearCurrencyData = () => {
     setSelectedToCurrency('USD');
+    setSymbols({});
     localStorage.removeItem('selectedToCurrency');
   };
 
-  // Expose clear function for logout
+  // Listen for logout events
   useEffect(() => {
-    // Listen for logout events
     const handleLogout = () => {
       clearCurrencyData();
     };
-
     window.addEventListener('logout', handleLogout);
     return () => {
       window.removeEventListener('logout', handleLogout);
@@ -57,17 +53,10 @@ export const CurrencyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, []);
 
   const value: CurrencyContextType = {
-    symbols: localSymbols,
+    symbols,
     selectedToCurrency,
     setSelectedToCurrency,
-    isLoading: false,
-    error: null,
-    refreshSymbols: () => {},
   };
 
-  return (
-    <CurrencyContext.Provider value={value}>
-      {children}
-    </CurrencyContext.Provider>
-  );
-}; 
+  return <CurrencyContext.Provider value={value}>{children}</CurrencyContext.Provider>;
+};
