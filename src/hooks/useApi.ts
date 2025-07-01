@@ -9,7 +9,7 @@ import {
   aiAPI,
 } from "@/config/apiService";
 import { useAuth } from "@/contexts/AuthContext";
-import { CurrencyExchangeRate, CurrencySymbolsResponse } from "@/config/types";
+import { ExchangeRate, CurrencySymbolsResponse } from "@/config/types";
 
 // Stock API hooks
 export const useStockSymbols = (
@@ -70,8 +70,8 @@ export const useExchangeRate = (
   target: string,
   customerType: string = "normal"
 ) => {
-  return useQuery<CurrencyExchangeRate, Error>({
-    queryKey: ["currency", "exchange", base, target, customerType],
+  return useQuery<ExchangeRate, Error>({
+    queryKey: [base, target, customerType],
     queryFn: () => currencyAPI.getExchangeRate(base, target, customerType),
     enabled: !!base && !!target,
     staleTime: 5 * 60 * 1000, // 5 minutes

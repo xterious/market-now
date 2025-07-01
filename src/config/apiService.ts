@@ -7,14 +7,13 @@ import {
   AuthResponse,
   Stock,
   News,
-  CurrencyExchangeRate,
+  ExchangeRate,
   StockWishlist,
   NewsWishlist,
   CurrencyWishlist,
   Role,
   RoleAssignmentRequest,
   CurrencySymbolsResponse,
-  RoleBasedExchangeRate,
   LiborRates,
   CompleteRatesInfo,
 } from "./types";
@@ -128,10 +127,11 @@ export const currencyAPI = {
     base: string,
     target: string,
     customerType: string = "normal"
-  ): Promise<CurrencyExchangeRate> => {
-    const response = await api.get<CurrencyExchangeRate>("/api/currency/exchange", {
+  ): Promise<ExchangeRate> => {
+    const response = await api.get<ExchangeRate>("/api/currency/exchange", {
       params: { base, target, customerType },
     });
+    console.log("getExchangeRate response:", response.data);
     return response.data;
   },
 };

@@ -1,4 +1,4 @@
-// API Types based on OpenAPI specification
+// User-related types
 
 export interface User {
   id: string;
@@ -49,6 +49,8 @@ export interface GrantedAuthority {
   authority: string;
 }
 
+// Stock-related types
+
 export interface Stock {
   content: any[];
   symbol: string;
@@ -58,6 +60,8 @@ export interface Stock {
   exchange: string;
   timestamp: number;
 }
+
+// News-related types
 
 export interface News {
   category: string;
@@ -71,20 +75,25 @@ export interface News {
   url: string;
 }
 
-export interface CurrencyExchangeRate {
+// Exchange Rate - **THIS replaces CurrencyExchangeRate**
+
+export interface ExchangeRate {
+  id: string;
   base: string;
   target: string;
   rate: number;
   finalRate: number;
   customerType: string;
+  lastUpdated: number;
 }
 
-export interface CurrencySymbol {
-  code: string;
-  name: string;
-  symbol: string;
-  flag?: string;
+// Currency symbols response
+
+export interface CurrencySymbolsResponse {
+  [key: string]: string; // e.g., "EUR": "Euro"
 }
+
+// Wishlist types
 
 export interface StockWishlist {
   username: string;
@@ -101,10 +110,14 @@ export interface CurrencyWishlist {
   favoriteCurrencies: string[];
 }
 
+// Roles & permissions
+
 export interface RoleAssignmentRequest {
   userId: string;
   roleNames: string[];
 }
+
+// LIBOR rates
 
 export interface LiborRate {
   id: string;
@@ -114,7 +127,24 @@ export interface LiborRate {
   description?: string;
 }
 
-// API Response types
+export interface LiborRates {
+  id: string;
+  normalRate: number;
+  specialRate: number;
+}
+
+export interface CompleteRatesInfo {
+  base: string;
+  target: string;
+  userCustomerType: string;
+  normalRate: ExchangeRate;
+  specialRate: ExchangeRate;
+  liborRates: LiborRates;
+  currentUserRate: ExchangeRate;
+}
+
+// Generic API response wrappers
+
 export interface ApiResponse<T> {
   data: T;
   message?: string;
@@ -128,34 +158,3 @@ export interface PaginatedResponse<T> {
   size: number;
   number: number;
 }
-
-// New types for role-based LIBOR rates
-export interface RoleBasedExchangeRate {
-  id: string;
-  base: string;
-  target: string;
-  baseRate: number;
-  finalRate: number;
-  customerType: string;
-}
-
-export interface LiborRates {
-  id: string;
-  normalRate: number;
-  specialRate: number;
-}
-
-export interface CompleteRatesInfo {
-  base: string;
-  target: string;
-  userCustomerType: string;
-  normalRate: RoleBasedExchangeRate;
-  specialRate: RoleBasedExchangeRate;
-  liborRates: LiborRates;
-  currentUserRate: RoleBasedExchangeRate;
-}
-
-// Update CurrencySymbol to match backend response format
-export interface CurrencySymbolsResponse {
-  [key: string]: string; // e.g., "EUR": "Euro"
-} 
