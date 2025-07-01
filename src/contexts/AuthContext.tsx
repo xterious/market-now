@@ -130,19 +130,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signup = async (userData: RegisterRequest): Promise<boolean> => {
-    setIsLoading(true);
-    try {
-      const newUser = await authAPI.register(userData);
-      
-      // After successful registration, log the user in
-      return await login(userData.username, userData.password);
-    } catch (error) {
-      console.error('Signup error:', error);
-      return false;
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  setIsLoading(true);
+  try {
+    // Call backend register endpoint
+    const newUser = await authAPI.register(userData);
+
+    // After successful registration, log in the user
+    return await login(userData.username, userData.password);
+  } catch (error) {
+    console.error('Signup error:', error);
+    return false;
+  } finally {
+    setIsLoading(false);
+  }
+};
+
 
   const loginWithGoogle = async (): Promise<boolean> => {
     setIsLoading(true);

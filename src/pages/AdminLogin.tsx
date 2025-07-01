@@ -159,9 +159,6 @@ const AdminLogin = () => {
             </Box>
 
             <Box sx={{ mt: 3, textAlign: 'center' }}>
-              <Typography variant="body2" color="text.secondary">
-                Demo credentials: admin / admin123
-              </Typography>
             </Box>
           </CardContent>
         </Card>
